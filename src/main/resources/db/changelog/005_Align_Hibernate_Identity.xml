@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.0.xsd">
+
+    <changeSet id="5" author="devops">
+        <comment>Align client identifiers with Hibernate identity generation</comment>
+        <dropForeignKeyConstraint
+            baseTableName="project"
+            constraintName="project_ibfk_1"/>
+        <addAutoIncrement
+            tableName="client"
+            columnName="id"
+            columnDataType="INT"/>
+        <addForeignKeyConstraint
+            constraintName="fk_project_client"
+            baseTableName="project"
+            baseColumnNames="client_id"
+            referencedTableName="client"
+            referencedColumnNames="id"
+            onDelete="CASCADE"/>
+        <rollback>
+            <dropForeignKeyConstraint
+                baseTableName="project"
+                constraintName="fk_project_client"/>
+            <sql>ALTER TABLE client MODIFY id INT NOT NULL</sql>
+            <addForeignKeyConstraint
+                constraintName="project_ibfk_1"
+                baseTableName="project"
+                baseColumnNames="client_id"
+                referencedTableName="client"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

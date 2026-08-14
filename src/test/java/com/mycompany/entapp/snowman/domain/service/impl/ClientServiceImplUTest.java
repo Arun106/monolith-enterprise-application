@@ -49,7 +49,7 @@ public class ClientServiceImplUTest {
     public void testCreateClient() throws Exception {
         Client client = getClient();
 
-        Mockito.when(clientRepository.getClient(client.getId())).thenReturn(client);
+        Mockito.when(clientRepository.getClient(client.getId())).thenReturn(null);
         Mockito.doNothing().when(clientRepository).createClient(client);
 
         classUnderTest.createClient(client);
@@ -81,7 +81,7 @@ public class ClientServiceImplUTest {
     public void testDeleteClient() throws Exception {
         int clientId = 1;
 
-        Mockito.when(clientRepository.getClient(clientId)).thenReturn(new Client());
+        Mockito.when(clientRepository.getClient(clientId)).thenReturn(getClient());
         Mockito.doNothing().when(clientRepository).deleteClient(clientId);
 
         classUnderTest.deleteClient(clientId);
@@ -102,7 +102,7 @@ public class ClientServiceImplUTest {
         Client client = new Client();
         client.setId(1);
         client.setClientName("Client");
-        client.setProjects(Collections.<Project>emptySet());
+        client.setProjects(Collections.singleton(new Project()));
         return client;
     }
 

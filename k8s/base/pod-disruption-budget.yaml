@@ -1,0 +1,12 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: snowman
+  labels:
+    app.kubernetes.io/name: snowman
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: snowman
+      app.kubernetes.io/component: application

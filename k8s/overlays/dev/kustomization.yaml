@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: snowman
+resources:
+  - ../../base
+  - mysql.yaml
+  - activemq.yaml
+secretGenerator:
+  - name: snowman-secrets
+    literals:
+      - jdbc-username=snowman
+      - jdbc-password=snowman-local
+  - name: mysql-secrets
+    literals:
+      - database=snowman
+      - username=snowman
+      - password=snowman-local
+      - root-password=root-local
+generatorOptions:
+  disableNameSuffixHash: true

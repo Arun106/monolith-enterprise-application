@@ -1,0 +1,62 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: snowman-database-migration
+  namespace: snowman
+  labels:
+    app.kubernetes.io/name: snowman
+    app.kubernetes.io/component: database-migration
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: snowman
+        app.kubernetes.io/component: database-migration
+    spec:
+      serviceAccountName: snowman
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: liquibase
+          image: ghcr.io/adikarthik/monolith-enterprise-application-migration:latest
+          args:
+            - --driver=com.mysql.cj.jdbc.Driver
+            - --url=$(SNOWMAN_JDBC_URL)
+            - --username=$(SNOWMAN_JDBC_USERNAME)
+            - --password=$(SNOWMAN_JDBC_PASSWORD)
+            - --changelog-file=changelog/db/liquibase-changelog-schema.xml
+            - update
+          env:
+            - name: SNOWMAN_JDBC_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: snowman-config
+                  key: jdbc-url
+            - name: SNOWMAN_JDBC_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: snowman-secrets
+                  key: jdbc-username
+            - name: SNOWMAN_JDBC_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: snowman-secrets
+                  key: jdbc-password
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL

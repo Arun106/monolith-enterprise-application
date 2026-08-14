@@ -35,3 +35,14 @@ target/*
 ehthumbs.db
 Thumbs.db
 /target/
+/dependency-reduced-pom.xml
+
+# Local runtime configuration and credentials
+.env
+.env.*
+!.env.example
+k8s/overlays/*/secret.yaml
+
+# Local Kubernetes and scanner output
+.kube/
+trivy-results.sarif

@@ -100,7 +100,7 @@ public class UserRestEndpointUTest {
 
         classInTest.updateExistingUser(userResource);
 
-        Mockito.verify(userService, Mockito.times(1)).createUser(user);
+        Mockito.verify(userService, Mockito.times(1)).updateUser(user);
     }
 
     @Test

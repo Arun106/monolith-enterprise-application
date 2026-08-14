@@ -1,7 +1,5 @@
 # Enterprise Application : Snowman
 
-[![Build Status](https://travis-ci.org/colinbut/enterprise-application.svg?branch=master)](https://travis-ci.org/colinbut/enterprise-application)
-
 ## Table of Contents
 
 - [Preamble](#preamble)
@@ -42,13 +40,17 @@ backend web service.
 
 ### <a name="prerequisites"></a>Pre - Requisites
 
-- Java JDK 7
-- Maven
+- Java JDK 8 (the source remains Java 7 compatible)
+- Maven 3.9+
 - MySQL
  
  
-1. Start up MySQL Server 
-2. run `run.sh` script
+1. Start up MySQL Server
+2. Run `mvn clean verify`
+3. Run the `run.sh` script
+
+For Docker, GitHub Actions CI/CD, Kubernetes, secrets, rollout, and rollback, see
+[DEVOPS.md](DEVOPS.md).
 
 ### <a name="architecture"></a>Software Architecture
 
@@ -207,4 +209,3 @@ Both sites would house the set of applications but only one site is up.
 If Primary site considered fail (i.e. multiple failovers of one or more applications (or application components
 if it is a Distributed Component Architecture)), then the Primary site should shutdown and thus Standby site
 would be required to be started up. 
-

@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: snowman-config
+data:
+  jdbc-url: jdbc:mysql://mysql.example.internal:3306/snowman?useSSL=true&requireSSL=true&serverTimezone=UTC
+  jms-broker-url: tcp://activemq.example.internal:61616

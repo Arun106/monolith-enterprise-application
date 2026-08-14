@@ -9,6 +9,7 @@ import com.mycompany.entapp.snowman.application.healthcheck.HealthCheck;
 import com.mycompany.entapp.snowman.application.healthcheck.HealthStatus;
 import com.mycompany.entapp.snowman.infrastructure.management.resource.StatusResource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -27,6 +28,11 @@ public class HealthCheckRestEndpoint {
         StatusResource statusResource = new StatusResource();
         statusResource.setStatus(healthStatus.getStatusString());
 
-        return ResponseEntity.ok(statusResource);
+        if (healthStatus == HealthStatus.UP) {
+            return ResponseEntity.ok(statusResource);
+        }
+
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(statusResource);
     }
 }

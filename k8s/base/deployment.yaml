@@ -1,0 +1,123 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: snowman
+  labels:
+    app.kubernetes.io/name: snowman
+    app.kubernetes.io/component: application
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: snowman
+      app.kubernetes.io/component: application
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: snowman
+        app.kubernetes.io/component: application
+    spec:
+      serviceAccountName: snowman
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: application
+          image: ghcr.io/adikarthik/monolith-enterprise-application:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8090
+              protocol: TCP
+          env:
+            - name: PORT
+              value: "8090"
+            - name: SNOWMAN_JDBC_DRIVER
+              valueFrom:
+                configMapKeyRef:
+                  name: snowman-config
+                  key: jdbc-driver
+            - name: SNOWMAN_JDBC_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: snowman-config
+                  key: jdbc-url
+            - name: SNOWMAN_JDBC_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: snowman-secrets
+                  key: jdbc-username
+            - name: SNOWMAN_JDBC_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: snowman-secrets
+                  key: jdbc-password
+            - name: SNOWMAN_JMS_BROKER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: snowman-config
+                  key: jms-broker-url
+            - name: SNOWMAN_HIBERNATE_DDL_AUTO
+              valueFrom:
+                configMapKeyRef:
+                  name: snowman-config
+                  key: hibernate-ddl-auto
+          resources:
+            requests:
+              cpu: 250m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi
+          startupProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 15
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: temporary-files
+              mountPath: /tmp
+      volumes:
+        - name: temporary-files
+          emptyDir:
+            sizeLimit: 64Mi
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: snowman
+              app.kubernetes.io/component: application

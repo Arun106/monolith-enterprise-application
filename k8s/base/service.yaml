@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: snowman
+  labels:
+    app.kubernetes.io/name: snowman
+    app.kubernetes.io/component: application
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: snowman
+    app.kubernetes.io/component: application
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP

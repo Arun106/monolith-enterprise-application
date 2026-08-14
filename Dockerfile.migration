@@ -1,0 +1,14 @@
+FROM maven:3.9.13-eclipse-temurin-8-noble AS driver
+
+RUN mvn --batch-mode --no-transfer-progress dependency:copy \
+    -Dartifact=com.mysql:mysql-connector-j:8.0.33 \
+    -DoutputDirectory=/driver
+
+FROM liquibase/liquibase:4.33.0
+
+COPY --from=driver /driver/mysql-connector-j-8.0.33.jar /liquibase/lib/mysql-connector-j.jar
+COPY src/main/resources/db /liquibase/changelog/db
+
+USER liquibase
+
+ENTRYPOINT ["liquibase"]

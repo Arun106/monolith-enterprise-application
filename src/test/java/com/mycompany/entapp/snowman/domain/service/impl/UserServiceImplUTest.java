@@ -76,7 +76,7 @@ public class UserServiceImplUTest {
 
         userService.deleteUser(userId);
 
-        Mockito.verify(userService, Mockito.times(1)).deleteUser(userId);
+        Mockito.verify(userDao, Mockito.times(1)).removeUser(userId);
     }
 
     private User getUser(int userId) {

@@ -32,7 +32,7 @@ public class DBHealthCheck extends AbstractJDBCDao {
             stmt = connection.createStatement();
             ResultSet rs = stmt.executeQuery(SELECT_MIN_1_FROM_APP_INFO);
 
-            if (rs.first()) {
+            if (rs.next()) {
                 return true;
             }
 

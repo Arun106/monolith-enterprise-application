@@ -5,41 +5,31 @@
  */
 package com.mycompany.entapp.snowman.infrastructure.db.dao;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 
 public abstract class AbstractJDBCDao {
 
-    private static final Logger LOG = LoggerFactory.getLogger(AbstractJDBCDao.class);
+    private static final String DEFAULT_DATABASE_CONNECTION_URL =
+        "jdbc:mysql://localhost:3306/snowman?createDatabaseIfNotExist=true";
+    private static final String DEFAULT_DATABASE_USERNAME = "username";
+    private static final String DEFAULT_DATABASE_PASSWORD = "password";
+    private static final String DEFAULT_DATABASE_DRIVER = "com.mysql.cj.jdbc.Driver";
 
-    private static final String DATABASE_HOST = "localhost";
-    private static final String DATABASE_PORT = "3306";
-    private static final String DATABASE = "snowman";
-
-    private static final String DATABASE_CONNECTION_URL = "jdbc:mysql://" + DATABASE_HOST + ":" + DATABASE_PORT + "/" + DATABASE;
-    private static final String DATABASE_USERNAME = "username";
-    private static final String DATABASE_PASSWORD = "password";
-
-    protected void setupDBDriver() {
+    protected void setupDBDriver() throws SQLException {
+        String driver = System.getProperty("jdbc.driverClassName", DEFAULT_DATABASE_DRIVER);
         try {
-            Class.forName("com.mysql.jdbc.Driver");
+            Class.forName(driver);
         } catch (ClassNotFoundException e) {
-            LOG.error("{}", e); // TODO should throw a business exception back up
+            throw new SQLException("Unable to load JDBC driver " + driver, e);
         }
     }
 
-    protected Connection getConnection() {
-        Connection connection = null;
-        try {
-            connection = DriverManager.getConnection(DATABASE_CONNECTION_URL, DATABASE_USERNAME, DATABASE_PASSWORD);
-        } catch (SQLException e) {
-            LOG.error("{}", e); // TODO should throw a business exception back up
-        }
-
-        return connection;
+    protected Connection getConnection() throws SQLException {
+        String url = System.getProperty("jdbc.url", DEFAULT_DATABASE_CONNECTION_URL);
+        String username = System.getProperty("jdbc.username", DEFAULT_DATABASE_USERNAME);
+        String password = System.getProperty("jdbc.password", DEFAULT_DATABASE_PASSWORD);
+        return DriverManager.getConnection(url, username, password);
     }
 }
