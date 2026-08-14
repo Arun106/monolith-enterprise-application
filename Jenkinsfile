@@ -25,7 +25,7 @@ pipeline {
         )
         choice(
             name: 'DEPLOY_TARGET',
-            choices: ['aks', 'none'],
+            choices: ['none', 'aks'],
             description: 'CD target for successful master builds'
         )
         string(name: 'ACR_LOGIN_SERVER', defaultValue: 'chunkhoundacr20260802.azurecr.io', description: 'AKS mode: <registry>.azurecr.io')
