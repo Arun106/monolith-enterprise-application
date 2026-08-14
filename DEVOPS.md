@@ -264,7 +264,10 @@ Required Jenkins configuration:
   kubectl (the pipeline installs a pinned kubectl client when absent);
 - Docker access for the Jenkins agent user;
 - a SonarQube server named `naukri-sonarqube`, including its token and a webhook
-  to `<jenkins-url>/sonarqube-webhook/` for quality-gate completion.
+  to `<jenkins-url>/sonarqube-webhook/` for quality-gate completion;
+- for fast OWASP Dependency-Check updates, a Jenkins secret-text credential
+  containing an NVD API key. Set its ID in `NVD_API_CREDENTIALS_ID`; leaving the
+  parameter empty uses the rate-limited public NVD feed.
 
 SonarQube is hosted on PVM1 (`4.154.168.83`) and is exposed to processes on
 that agent as `http://127.0.0.1:19000`. Because the scanner also runs on PVM1,

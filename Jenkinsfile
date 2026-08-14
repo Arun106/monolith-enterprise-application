@@ -28,6 +28,11 @@ pipeline {
             choices: ['none', 'aks'],
             description: 'CD target for successful master builds'
         )
+        string(
+            name: 'NVD_API_CREDENTIALS_ID',
+            defaultValue: '',
+            description: 'Optional Jenkins secret-text credential containing an NVD API key'
+        )
         string(name: 'ACR_LOGIN_SERVER', defaultValue: 'chunkhoundacr20260802.azurecr.io', description: 'AKS mode: <registry>.azurecr.io')
         string(name: 'ACR_CREDENTIALS_ID', defaultValue: 'acr-chunkhound', description: 'AKS mode: Jenkins username/password credential for ACR')
         string(name: 'AKS_RESOURCE_GROUP', defaultValue: 'Ar-RG', description: 'AKS mode: Azure resource group')
@@ -153,14 +158,34 @@ pipeline {
 
         stage('OWASP dependency audit') {
             steps {
-                sh '''#!/bin/bash
-                    set -euo pipefail
-                    mvn --batch-mode --no-transfer-progress \
-                        org.owasp:dependency-check-maven:12.1.8:check \
-                        -DskipTests \
-                        -Dformat=ALL \
-                        -DfailBuildOnCVSS=9.0
-                '''
+                script {
+                    if (params.NVD_API_CREDENTIALS_ID?.trim()) {
+                        withCredentials([string(
+                            credentialsId: params.NVD_API_CREDENTIALS_ID,
+                            variable: 'NVD_API_KEY'
+                        )]) {
+                            sh '''#!/bin/bash
+                                set -euo pipefail
+                                mvn --batch-mode --no-transfer-progress \
+                                    org.owasp:dependency-check-maven:12.1.8:check \
+                                    -DskipTests \
+                                    -Dformat=ALL \
+                                    -DfailBuildOnCVSS=9.0 \
+                                    -DnvdApiKey="$NVD_API_KEY"
+                            '''
+                        }
+                    } else {
+                        echo 'NVD_API_CREDENTIALS_ID is empty; the initial NVD update may be rate limited.'
+                        sh '''#!/bin/bash
+                            set -euo pipefail
+                            mvn --batch-mode --no-transfer-progress \
+                                org.owasp:dependency-check-maven:12.1.8:check \
+                                -DskipTests \
+                                -Dformat=ALL \
+                                -DfailBuildOnCVSS=9.0
+                        '''
+                    }
+                }
             }
             post {
                 always {
