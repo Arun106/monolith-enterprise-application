@@ -266,6 +266,11 @@ Required Jenkins configuration:
 - a SonarQube server named `naukri-sonarqube`, including its token and a webhook
   to `<jenkins-url>/sonarqube-webhook/` for quality-gate completion.
 
+The PVM1 scanner reaches the controller-side SonarQube through the existing
+reverse SSH tunnel at `http://127.0.0.1:19000` and reads the dedicated masked
+Jenkins secret `sonarqube-snowman-token`. The persistent
+`naukri-sonar-tunnel-live` Jenkins job must remain running.
+
 The job enables the Jenkins GitHub push trigger. Register a GitHub webhook with
 content type `application/json` and payload URL:
 
