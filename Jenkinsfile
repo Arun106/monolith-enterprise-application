@@ -84,7 +84,7 @@ pipeline {
                             --output "$HOME/.local/bin/kubectl"
                         chmod 0755 "$HOME/.local/bin/kubectl"
                     fi
-                    if [ "$DEPLOY_TARGET" = aks ]; then
+                    if [ "${DEPLOY_TARGET:-none}" = aks ]; then
                         command -v az >/dev/null || {
                             echo "Azure CLI is required for AKS deployment" >&2
                             exit 1
