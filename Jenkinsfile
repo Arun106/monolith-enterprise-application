@@ -60,6 +60,7 @@ pipeline {
         MIGRATION_IMAGE = 'snowman-enterprise-migration'
         KUBECONFORM_IMAGE = 'ghcr.io/yannh/kubeconform:v0.7.0'
         TRIVY_IMAGE = 'aquasec/trivy:0.65.0'
+        DOCKER_COMPOSE_VERSION = '2.39.2'
         DEPLOYMENT_STARTED = 'false'
         SECURITY_GATE_MODE = "${params.SECURITY_GATE_MODE ?: 'report-only'}"
     }
@@ -97,6 +98,13 @@ pipeline {
                             --output "$HOME/.local/bin/kubectl"
                         chmod 0755 "$HOME/.local/bin/kubectl"
                     fi
+                    if ! docker compose version >/dev/null 2>&1; then
+                        mkdir -p "$HOME/.docker/cli-plugins"
+                        curl --fail --silent --show-error --location \
+                            "https://github.com/docker/compose/releases/download/v${DOCKER_COMPOSE_VERSION}/docker-compose-linux-x86_64" \
+                            --output "$HOME/.docker/cli-plugins/docker-compose"
+                        chmod 0755 "$HOME/.docker/cli-plugins/docker-compose"
+                    fi
                     if [ "${DEPLOY_TARGET:-none}" = aks ]; then
                         command -v az >/dev/null || {
                             echo "Azure CLI is required for AKS deployment" >&2
@@ -105,6 +113,7 @@ pipeline {
                     fi
                     git --version
                     docker --version
+                    docker compose version
                     kubectl version --client
                 '''
             }
