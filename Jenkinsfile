@@ -326,6 +326,7 @@ pipeline {
                     mkdir -p .trivy-cache
                     docker run --rm \
                         --user "$(id -u):$(id -g)" \
+                        --group-add "$(stat -c %g /var/run/docker.sock)" \
                         --env HOME=/tmp \
                         --volume /var/run/docker.sock:/var/run/docker.sock \
                         --volume "$WORKSPACE/.trivy-cache:/tmp/trivy-cache" \
