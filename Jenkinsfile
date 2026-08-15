@@ -49,7 +49,7 @@ pipeline {
         MAVEN_IMAGE = 'maven:3.9.13-eclipse-temurin-8-noble'
         SONARQUBE_ENV = 'naukri-sonarqube'
         SONAR_CREDENTIALS_ID = 'sonarqube-snowman-token'
-        PVM1_SONAR_URL = 'http://127.0.0.1:19000'
+        PVM1_SONAR_URL = 'http://127.0.0.1:9000'
         SONAR_PROJECT_KEY = 'snowman-enterprise-monolith'
         APPLICATION_IMAGE = 'snowman-enterprise'
         MIGRATION_IMAGE = 'snowman-enterprise-migration'

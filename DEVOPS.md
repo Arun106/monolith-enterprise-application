@@ -270,7 +270,7 @@ Required Jenkins configuration:
   parameter empty uses the rate-limited public NVD feed.
 
 SonarQube is hosted on PVM1 (`4.154.168.83`) and is exposed to processes on
-that agent as `http://127.0.0.1:19000`. Because the scanner also runs on PVM1,
+that agent as `http://127.0.0.1:9000`. Because the scanner also runs on PVM1,
 this private loopback address is preferred over exposing SonarQube publicly.
 The scanner reads the dedicated masked Jenkins secret
 `sonarqube-snowman-token`.
