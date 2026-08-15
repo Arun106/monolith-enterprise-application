@@ -25,8 +25,8 @@ pipeline {
         )
         choice(
             name: 'DEPLOY_TARGET',
-            choices: ['none', 'aks'],
-            description: 'CD target for successful master builds'
+            choices: ['none', 'acr', 'aks'],
+            description: 'CD target: CI only, publish images to ACR, or publish and deploy to AKS'
         )
         string(
             name: 'NVD_API_CREDENTIALS_ID',
@@ -56,8 +56,8 @@ pipeline {
         SONAR_CREDENTIALS_ID = 'sonarqube-snowman-token'
         PVM1_SONAR_URL = 'http://127.0.0.1:9000'
         SONAR_PROJECT_KEY = 'snowman-enterprise-monolith'
-        APPLICATION_IMAGE = 'snowman-enterprise'
-        MIGRATION_IMAGE = 'snowman-enterprise-migration'
+        APPLICATION_IMAGE = 'monolith-enterprise-application'
+        MIGRATION_IMAGE = 'monolith-enterprise-application-migration'
         KUBECONFORM_IMAGE = 'ghcr.io/yannh/kubeconform:v0.7.0'
         TRIVY_IMAGE = 'aquasec/trivy:0.65.0'
         DOCKER_COMPOSE_VERSION = '2.39.2'
@@ -347,10 +347,7 @@ pipeline {
 
         stage('Publish images to ACR') {
             when {
-                allOf {
-                    expression { params.DEPLOY_TARGET == 'aks' }
-                    expression { params.REPOSITORY_BRANCH == 'master' }
-                }
+                expression { params.DEPLOY_TARGET in ['acr', 'aks'] }
             }
             steps {
                 script {
@@ -383,10 +380,7 @@ pipeline {
 
         stage('Deploy to AKS') {
             when {
-                allOf {
-                    expression { params.DEPLOY_TARGET == 'aks' }
-                    expression { params.REPOSITORY_BRANCH == 'master' }
-                }
+                expression { params.DEPLOY_TARGET == 'aks' }
             }
             steps {
                 script {
@@ -462,7 +456,7 @@ pipeline {
         }
         failure {
             script {
-                if (env.DEPLOYMENT_STARTED == 'true' && params.DEPLOY_TARGET == 'aks' && params.REPOSITORY_BRANCH == 'master') {
+                if (env.DEPLOYMENT_STARTED == 'true' && params.DEPLOY_TARGET == 'aks') {
                     sh '''#!/bin/bash
                         kubectl rollout undo --namespace snowman deployment/snowman || true
                         az logout >/dev/null 2>&1 || true

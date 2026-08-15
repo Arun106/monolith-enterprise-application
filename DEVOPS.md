@@ -285,6 +285,12 @@ Trivy reports are still generated and archived. Select `strict` to fail the
 pipeline when OWASP finds CVSS 9+ dependencies or Trivy finds a fixable critical
 container vulnerability.
 
+`DEPLOY_TARGET=acr` publishes the immutable application and migration image
+tags to ACR without changing AKS. `DEPLOY_TARGET=aks` publishes the images and
+deploys them to the configured cluster.
+The ACR repositories are named `monolith-enterprise-application` and
+`monolith-enterprise-application-migration` to match this project.
+
 The job enables the Jenkins GitHub push trigger. Register a GitHub webhook with
 content type `application/json` and payload URL:
 
