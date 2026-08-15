@@ -203,8 +203,57 @@ pipeline {
 
         stage('Quality gate') {
             steps {
-                timeout(time: 10, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
+                withCredentials([string(
+                    credentialsId: env.SONAR_CREDENTIALS_ID,
+                    variable: 'SONAR_TOKEN'
+                )]) {
+                    sh '''#!/bin/bash
+                        set -euo pipefail
+                        task_file=target/sonar/report-task.txt
+                        test -s "$task_file"
+                        ce_task_url="$(awk -F= '$1 == "ceTaskUrl" { print $2 }' "$task_file")"
+                        test -n "$ce_task_url"
+
+                        analysis_id=''
+                        for attempt in $(seq 1 60); do
+                            task_response="$(curl --fail --silent --show-error \
+                                --user "$SONAR_TOKEN:" "$ce_task_url")"
+                            task_status="$(printf '%s' "$task_response" \
+                                | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)"
+                            case "$task_status" in
+                                SUCCESS)
+                                    analysis_id="$(printf '%s' "$task_response" \
+                                        | grep -o '"analysisId":"[^"]*"' | head -1 | cut -d'"' -f4)"
+                                    break
+                                    ;;
+                                FAILED|CANCELED)
+                                    echo "SonarQube compute task ended with status $task_status" >&2
+                                    exit 1
+                                    ;;
+                                PENDING|IN_PROGRESS)
+                                    sleep 5
+                                    ;;
+                                *)
+                                    echo "Unexpected SonarQube compute-task status: $task_status" >&2
+                                    exit 1
+                                    ;;
+                            esac
+                        done
+                        test -n "$analysis_id" || {
+                            echo 'Timed out waiting for the SonarQube compute task' >&2
+                            exit 1
+                        }
+
+                        sonar_base_url="${ce_task_url%%/api/ce/task*}"
+                        gate_response="$(curl --fail --silent --show-error \
+                            --user "$SONAR_TOKEN:" --get \
+                            --data-urlencode "analysisId=$analysis_id" \
+                            "$sonar_base_url/api/qualitygates/project_status")"
+                        gate_status="$(printf '%s' "$gate_response" \
+                            | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)"
+                        echo "SonarQube quality gate status: $gate_status"
+                        test "$gate_status" = OK
+                    '''
                 }
             }
         }

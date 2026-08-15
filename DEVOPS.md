@@ -275,6 +275,10 @@ this private loopback address is preferred over exposing SonarQube publicly.
 The scanner reads the dedicated masked Jenkins secret
 `sonarqube-snowman-token`.
 
+The quality-gate stage polls the analysis task from PVM1. This is intentional:
+`127.0.0.1:9000` identifies PVM1's SonarQube only from the agent, while the same
+address on the Jenkins controller identifies a different network namespace.
+
 The `SECURITY_GATE_MODE` build parameter defaults to `report-only` because the
 legacy Java 7 dependency baseline contains known vulnerabilities. OWASP and
 Trivy reports are still generated and archived. Select `strict` to fail the
