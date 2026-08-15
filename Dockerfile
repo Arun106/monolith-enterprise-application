@@ -6,8 +6,7 @@ WORKDIR /workspace
 
 COPY pom.xml ./
 COPY src ./src
-RUN --mount=type=cache,target=/root/.m2 \
-    mvn --batch-mode --no-transfer-progress clean verify
+RUN mvn --batch-mode --no-transfer-progress clean verify
 
 FROM eclipse-temurin:8u492-b09-jre-noble
 
