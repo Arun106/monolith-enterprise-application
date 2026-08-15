@@ -262,7 +262,14 @@ pipeline {
             steps {
                 sh '''#!/bin/bash
                     set -euo pipefail
-                    docker compose config --quiet
+                    if docker compose version >/dev/null 2>&1; then
+                        docker compose config --quiet
+                    elif command -v docker-compose >/dev/null 2>&1; then
+                        docker-compose config --quiet
+                    else
+                        echo 'Docker Compose is required on PVM1 (plugin or standalone command)' >&2
+                        exit 1
+                    fi
                     kubectl kustomize k8s/overlays/dev > snowman-dev.yaml
                     kubectl kustomize k8s/overlays/production > snowman-production.yaml
                     kubectl kustomize k8s/jobs > snowman-migration.yaml
