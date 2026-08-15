@@ -275,6 +275,12 @@ this private loopback address is preferred over exposing SonarQube publicly.
 The scanner reads the dedicated masked Jenkins secret
 `sonarqube-snowman-token`.
 
+The `SECURITY_GATE_MODE` build parameter defaults to `report-only` because the
+legacy Java 7 dependency baseline contains known vulnerabilities. OWASP and
+Trivy reports are still generated and archived. Select `strict` to fail the
+pipeline when OWASP finds CVSS 9+ dependencies or Trivy finds a fixable critical
+container vulnerability.
+
 The job enables the Jenkins GitHub push trigger. Register a GitHub webhook with
 content type `application/json` and payload URL:
 

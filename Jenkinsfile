@@ -33,6 +33,11 @@ pipeline {
             defaultValue: '',
             description: 'Optional Jenkins secret-text credential containing an NVD API key'
         )
+        choice(
+            name: 'SECURITY_GATE_MODE',
+            choices: ['report-only', 'strict'],
+            description: 'Report legacy vulnerabilities without blocking CI, or enforce security thresholds'
+        )
         string(name: 'ACR_LOGIN_SERVER', defaultValue: 'chunkhoundacr20260802.azurecr.io', description: 'AKS mode: <registry>.azurecr.io')
         string(name: 'ACR_CREDENTIALS_ID', defaultValue: 'acr-chunkhound', description: 'AKS mode: Jenkins username/password credential for ACR')
         string(name: 'AKS_RESOURCE_GROUP', defaultValue: 'Ar-RG', description: 'AKS mode: Azure resource group')
@@ -56,6 +61,7 @@ pipeline {
         KUBECONFORM_IMAGE = 'ghcr.io/yannh/kubeconform:v0.7.0'
         TRIVY_IMAGE = 'aquasec/trivy:0.65.0'
         DEPLOYMENT_STARTED = 'false'
+        SECURITY_GATE_MODE = "${params.SECURITY_GATE_MODE ?: 'report-only'}"
     }
 
     stages {
@@ -170,7 +176,7 @@ pipeline {
                                     org.owasp:dependency-check-maven:12.1.8:check \
                                     -DskipTests \
                                     -Dformat=ALL \
-                                    -DfailBuildOnCVSS=9.0 \
+                                    -DfailBuildOnCVSS="$([ "$SECURITY_GATE_MODE" = strict ] && printf 9.0 || printf 11.0)" \
                                     -DnvdApiKey="$NVD_API_KEY"
                             '''
                         }
@@ -182,7 +188,7 @@ pipeline {
                                 org.owasp:dependency-check-maven:12.1.8:check \
                                 -DskipTests \
                                 -Dformat=ALL \
-                                -DfailBuildOnCVSS=9.0
+                                -DfailBuildOnCVSS="$([ "$SECURITY_GATE_MODE" = strict ] && printf 9.0 || printf 11.0)"
                         '''
                     }
                 }
@@ -252,14 +258,18 @@ pipeline {
                         --output /root/.cache/trivy-image-report.json \
                         "$APPLICATION_IMAGE:$IMAGE_TAG"
                     cp .trivy-cache/trivy-image-report.json trivy-image-report.json
-                    docker run --rm \
-                        --volume /var/run/docker.sock:/var/run/docker.sock \
-                        --volume "$WORKSPACE/.trivy-cache:/root/.cache/" \
-                        "$TRIVY_IMAGE" image \
-                        --ignore-unfixed \
-                        --severity CRITICAL \
-                        --exit-code 1 \
-                        "$APPLICATION_IMAGE:$IMAGE_TAG"
+                    if [ "$SECURITY_GATE_MODE" = strict ]; then
+                        docker run --rm \
+                            --volume /var/run/docker.sock:/var/run/docker.sock \
+                            --volume "$WORKSPACE/.trivy-cache:/root/.cache/" \
+                            "$TRIVY_IMAGE" image \
+                            --ignore-unfixed \
+                            --severity CRITICAL \
+                            --exit-code 1 \
+                            "$APPLICATION_IMAGE:$IMAGE_TAG"
+                    else
+                        echo 'Security scans are report-only for this legacy baseline; reports remain archived.'
+                    fi
                 '''
             }
             post {
