@@ -68,6 +68,16 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
+                sh '''#!/bin/bash
+                    set -euo pipefail
+                    if [ -d .trivy-cache ]; then
+                        docker run --rm \
+                            --entrypoint sh \
+                            --volume "$WORKSPACE/.trivy-cache:/cache" \
+                            "$TRIVY_IMAGE" \
+                            -c "chown -R $(id -u):$(id -g) /cache"
+                    fi
+                '''
                 deleteDir()
                 git branch: params.REPOSITORY_BRANCH, url: params.REPOSITORY_URL
                 script {
@@ -126,6 +136,7 @@ pipeline {
                     mkdir -p "$HOME/.m2"
                     docker run --rm \
                         --user "$(id -u):$(id -g)" \
+                        --group-add "$(stat -c %g /var/run/docker.sock)" \
                         --env HOME=/tmp/jenkins-user \
                         --env MAVEN_CONFIG=/tmp/jenkins-user/.m2 \
                         --volume "$WORKSPACE:/workspace" \
@@ -314,20 +325,27 @@ pipeline {
                     set -euo pipefail
                     mkdir -p .trivy-cache
                     docker run --rm \
+                        --user "$(id -u):$(id -g)" \
+                        --env HOME=/tmp \
                         --volume /var/run/docker.sock:/var/run/docker.sock \
-                        --volume "$WORKSPACE/.trivy-cache:/root/.cache/" \
+                        --volume "$WORKSPACE/.trivy-cache:/tmp/trivy-cache" \
                         "$TRIVY_IMAGE" image \
+                        --cache-dir /tmp/trivy-cache/trivy \
                         --ignore-unfixed \
                         --severity HIGH,CRITICAL \
                         --format json \
-                        --output /root/.cache/trivy-image-report.json \
+                        --output /tmp/trivy-cache/trivy-image-report.json \
                         "$APPLICATION_IMAGE:$IMAGE_TAG"
                     cp .trivy-cache/trivy-image-report.json trivy-image-report.json
                     if [ "$SECURITY_GATE_MODE" = strict ]; then
                         docker run --rm \
+                            --user "$(id -u):$(id -g)" \
+                            --group-add "$(stat -c %g /var/run/docker.sock)" \
+                            --env HOME=/tmp \
                             --volume /var/run/docker.sock:/var/run/docker.sock \
-                            --volume "$WORKSPACE/.trivy-cache:/root/.cache/" \
+                            --volume "$WORKSPACE/.trivy-cache:/tmp/trivy-cache" \
                             "$TRIVY_IMAGE" image \
+                            --cache-dir /tmp/trivy-cache/trivy \
                             --ignore-unfixed \
                             --severity CRITICAL \
                             --exit-code 1 \
