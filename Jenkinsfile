@@ -211,7 +211,7 @@ pipeline {
                         set -euo pipefail
                         task_file=target/sonar/report-task.txt
                         test -s "$task_file"
-                        ce_task_url="$(awk -F= '$1 == "ceTaskUrl" { print $2 }' "$task_file")"
+                        ce_task_url="$(awk '/^ceTaskUrl=/ { sub(/^[^=]*=/, ""); print }' "$task_file")"
                         test -n "$ce_task_url"
 
                         analysis_id=''
