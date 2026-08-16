@@ -6,6 +6,7 @@ pipeline {
         skipDefaultCheckout(true)
         disableConcurrentBuilds()
         timeout(time: 60, unit: 'MINUTES')
+
         buildDiscarder(
             logRotator(
                 numToKeepStr: '20',
@@ -34,8 +35,12 @@ pipeline {
 
         choice(
             name: 'DEPLOY_TARGET',
-            choices: ['none', 'acr', 'aks'],
-            description: 'CD target: CI only, publish images to ACR, or publish and deploy to AKS'
+            choices: [
+                'none',
+                'acr',
+                'aks'
+            ],
+            description: 'none = CI only, acr = push images, aks = push and deploy'
         )
 
         string(
@@ -46,50 +51,53 @@ pipeline {
 
         choice(
             name: 'SECURITY_GATE_MODE',
-            choices: ['report-only', 'strict'],
-            description: 'Report legacy vulnerabilities without blocking CI, or enforce security thresholds'
+            choices: [
+                'report-only',
+                'strict'
+            ],
+            description: 'Security scan mode'
         )
 
         string(
             name: 'ACR_LOGIN_SERVER',
             defaultValue: 'chunkhoundacr20260802.azurecr.io',
-            description: 'AKS mode: <registry>.azurecr.io'
+            description: 'Azure Container Registry login server'
         )
 
         string(
             name: 'ACR_CREDENTIALS_ID',
             defaultValue: 'acr-chunkhound',
-            description: 'AKS mode: Jenkins username/password credential for ACR'
+            description: 'Jenkins ACR username/password credential'
         )
 
         string(
             name: 'AKS_RESOURCE_GROUP',
             defaultValue: 'Ar-RG',
-            description: 'AKS mode: Azure resource group'
+            description: 'AKS resource group'
         )
 
         string(
             name: 'AKS_CLUSTER_NAME',
             defaultValue: 'Ar-AKS',
-            description: 'AKS mode: AKS cluster name'
+            description: 'AKS cluster name'
         )
 
         string(
             name: 'AZURE_TENANT_ID',
             defaultValue: 'pavip7547gmail.onmicrosoft.com',
-            description: 'AKS mode: Microsoft Entra tenant ID'
+            description: 'Azure tenant ID'
         )
 
         string(
             name: 'AZURE_SUBSCRIPTION_ID',
             defaultValue: 'ffcf8f61-5974-487d-95d9-9adf380c6233',
-            description: 'AKS mode: Azure subscription ID'
+            description: 'Azure subscription ID'
         )
 
         string(
             name: 'AZURE_CREDENTIALS_ID',
             defaultValue: 'azure-sp',
-            description: 'AKS mode: service-principal username/password credential'
+            description: 'Azure service principal Jenkins credential'
         )
     }
 
@@ -98,30 +106,34 @@ pipeline {
         CI = 'true'
 
         /*
-         * Host Java is kept for Jenkins/agent utilities.
-         * Maven itself runs inside MAVEN_IMAGE.
+         * Host Java is only used for Jenkins/agent utilities.
+         * Maven runs inside Docker.
          */
         JAVA_HOME = '/usr/lib/jvm/java-17-openjdk-amd64'
 
-        PATH = "${env.HOME}/.local/bin:/usr/local/bin:/usr/lib/jvm/java-17-openjdk-amd64/bin:${env.PATH}"
-
         /*
-         * Maven is executed inside this container for:
-         * 1. Build
-         * 2. SonarQube
-         * 3. OWASP
+         * IMPORTANT:
+         *
+         * Do NOT define PATH here.
+         *
+         * Jenkins already has a working PATH.
          */
         MAVEN_IMAGE = 'maven:3.9.13-eclipse-temurin-8-noble'
 
         SONARQUBE_ENV = 'naukri-sonarqube'
+
         SONAR_CREDENTIALS_ID = 'sonarqube-snowman-token'
+
         PVM1_SONAR_URL = 'http://127.0.0.1:9000'
+
         SONAR_PROJECT_KEY = 'snowman-enterprise-monolith'
 
         APPLICATION_IMAGE = 'monolith-enterprise-application'
+
         MIGRATION_IMAGE = 'monolith-enterprise-application-migration'
 
         KUBECONFORM_IMAGE = 'ghcr.io/yannh/kubeconform:v0.7.0'
+
         TRIVY_IMAGE = 'aquasec/trivy:0.65.0'
 
         DOCKER_COMPOSE_VERSION = '2.39.2'
@@ -131,13 +143,14 @@ pipeline {
         SECURITY_GATE_MODE = "${params.SECURITY_GATE_MODE ?: 'report-only'}"
     }
 
+
     stages {
 
-        /*
-         * ============================================================
-         * CHECKOUT
-         * ============================================================
-         */
+
+        // ============================================================
+        // CHECKOUT
+        // ============================================================
+
         stage('Checkout') {
 
             steps {
@@ -166,11 +179,10 @@ pipeline {
         }
 
 
-        /*
-         * ============================================================
-         * AGENT PREREQUISITES
-         * ============================================================
-         */
+        // ============================================================
+        // AGENT PREREQUISITES
+        // ============================================================
+
         stage('Agent prerequisites') {
 
             steps {
@@ -189,21 +201,31 @@ pipeline {
                     echo "WORKSPACE: $WORKSPACE"
 
                     echo "========================================"
-                    echo "Checking required commands"
+                    echo "CHECKING REQUIRED COMMANDS"
                     echo "========================================"
 
                     for command in git docker curl java; do
-                        command -v "$command" >/dev/null || {
-                            echo "Required command is missing on PVM1: $command" >&2
+
+                        if ! command -v "$command" >/dev/null 2>&1; then
+
+                            echo "ERROR: Required command not found: $command"
+
                             exit 1
-                        }
+
+                        fi
+
                     done
 
-                    if ! command -v kubectl >/dev/null; then
+                    /*
+                     * Install kubectl for the Jenkins user if missing.
+                     */
+
+                    if ! command -v kubectl >/dev/null 2>&1; then
 
                         mkdir -p "$HOME/.local/bin"
 
-                        curl --fail \
+                        curl \
+                            --fail \
                             --silent \
                             --show-error \
                             --location \
@@ -211,13 +233,20 @@ pipeline {
                             --output "$HOME/.local/bin/kubectl"
 
                         chmod 0755 "$HOME/.local/bin/kubectl"
+
                     fi
+
+
+                    /*
+                     * Install Docker Compose plugin if missing.
+                     */
 
                     if ! docker compose version >/dev/null 2>&1; then
 
                         mkdir -p "$HOME/.docker/cli-plugins"
 
-                        curl --fail \
+                        curl \
+                            --fail \
                             --silent \
                             --show-error \
                             --location \
@@ -225,49 +254,59 @@ pipeline {
                             --output "$HOME/.docker/cli-plugins/docker-compose"
 
                         chmod 0755 "$HOME/.docker/cli-plugins/docker-compose"
+
                     fi
+
+
+                    /*
+                     * Azure CLI is required only for AKS deployment.
+                     */
 
                     if [ "${DEPLOY_TARGET:-none}" = "aks" ]; then
 
-                        command -v az >/dev/null || {
-                            echo "Azure CLI is required for AKS deployment" >&2
+                        if ! command -v az >/dev/null 2>&1; then
+
+                            echo "ERROR: Azure CLI is required for AKS deployment"
+
                             exit 1
-                        }
+
+                        fi
 
                     fi
 
+
                     echo "========================================"
-                    echo "Tool versions"
+                    echo "TOOL VERSIONS"
                     echo "========================================"
 
                     git --version
+
                     docker --version
+
                     docker compose version
+
                     java -version
+
                     kubectl version --client
                 '''
             }
         }
 
 
-        /*
-         * ============================================================
-         * BUILD + UNIT TEST
-         *
-         * IMPORTANT:
-         *
-         * Maven runs inside Docker.
-         *
-         * Host:
-         *   $WORKSPACE/.m2
-         *
-         * Container:
-         *   /maven-repository
-         *
-         * This prevents Maven from trying to use:
-         *   /root/.m2
-         * ============================================================
-         */
+        // ============================================================
+        // BUILD AND UNIT TEST
+        //
+        // Maven runs ONLY inside Docker.
+        //
+        // Host:
+        //   $WORKSPACE/.m2
+        //
+        // Container:
+        //   /maven-repository
+        //
+        // This prevents /root/.m2 permission problems.
+        // ============================================================
+
         stage('Build and unit test') {
 
             steps {
@@ -286,12 +325,14 @@ pipeline {
                     echo "WORKSPACE: $WORKSPACE"
                     echo "MAVEN_IMAGE: $MAVEN_IMAGE"
 
-                    /*
-                     * Maven repository belongs to the Jenkins workspace.
-                     */
+                    echo "========================================"
+                    echo "PREPARING MAVEN REPOSITORY"
+                    echo "========================================"
+
                     maven_repo="$WORKSPACE/.m2"
 
                     rm -rf "$maven_repo"
+
                     mkdir -p "$maven_repo"
 
                     chmod 755 "$maven_repo"
@@ -300,10 +341,11 @@ pipeline {
                     echo "$maven_repo"
 
                     echo "========================================"
-                    echo "Starting Maven container"
+                    echo "STARTING MAVEN CONTAINER"
                     echo "========================================"
 
-                    docker run --rm \
+                    docker run \
+                        --rm \
                         --user "$(id -u):$(id -g)" \
                         --env HOME=/tmp/jenkins-user \
                         --volume "$WORKSPACE:/workspace" \
@@ -315,20 +357,37 @@ pipeline {
 
                             mkdir -p /tmp/jenkins-user
 
-                            echo "Container user:"
+                            echo "========================================"
+                            echo "CONTAINER INFORMATION"
+                            echo "========================================"
+
+                            echo "User:"
                             id
 
-                            echo "Container HOME:"
+                            echo "HOME:"
                             echo "$HOME"
 
-                            echo "Java:"
+                            echo "========================================"
+                            echo "JAVA VERSION"
+                            echo "========================================"
+
                             java -version
 
-                            echo "Maven:"
+                            echo "========================================"
+                            echo "MAVEN VERSION"
+                            echo "========================================"
+
                             mvn -version
 
-                            echo "Maven repository:"
+                            echo "========================================"
+                            echo "MAVEN REPOSITORY"
+                            echo "========================================"
+
                             ls -ld /maven-repository
+
+                            echo "========================================"
+                            echo "RUNNING MAVEN"
+                            echo "========================================"
 
                             mvn \
                                 --batch-mode \
@@ -337,17 +396,30 @@ pipeline {
                                 -Dliquibase.should.run=false \
                                 -Dmaven.repo.local=/maven-repository \
                                 clean verify
+
+                            echo "========================================"
+                            echo "MAVEN BUILD SUCCESSFUL"
+                            echo "========================================"
                         '
 
+
                     echo "========================================"
-                    echo "Checking build artifacts"
+                    echo "CHECKING BUILD ARTIFACTS"
                     echo "========================================"
 
                     test -s target/Snowman.jar
 
                     test -s target/site/jacoco/jacoco.xml
 
-                    echo "Build successful."
+                    echo "Snowman.jar:"
+                    ls -lh target/Snowman.jar
+
+                    echo "Jacoco report:"
+                    ls -lh target/site/jacoco/jacoco.xml
+
+                    echo "========================================"
+                    echo "BUILD AND UNIT TEST SUCCESSFUL"
+                    echo "========================================"
                 '''
             }
 
@@ -357,20 +429,18 @@ pipeline {
 
                     junit(
                         allowEmptyResults: true,
-                        testResults: 'target/surefire-reports/*.xml,target/failsafe-reports/*.xml'
+                        testResults:
+                            'target/surefire-reports/*.xml,target/failsafe-reports/*.xml'
                     )
                 }
             }
         }
 
 
-        /*
-         * ============================================================
-         * SONARQUBE ANALYSIS
-         *
-         * Maven also runs inside the same Maven container.
-         * ============================================================
-         */
+        // ============================================================
+        // SONARQUBE
+        // ============================================================
+
         stage('SonarQube analysis') {
 
             steps {
@@ -395,10 +465,13 @@ pipeline {
 
                             mkdir -p "$maven_repo"
 
-                            docker run --rm \
+                            docker run \
+                                --rm \
                                 --user "$(id -u):$(id -g)" \
                                 --env HOME=/tmp/jenkins-user \
                                 --env SONAR_TOKEN="$SONAR_TOKEN" \
+                                --env SONAR_HOST_URL="$PVM1_SONAR_URL" \
+                                --env BUILD_NUMBER="$BUILD_NUMBER" \
                                 --volume "$WORKSPACE:/workspace" \
                                 --volume "$maven_repo:/maven-repository" \
                                 --workdir /workspace \
@@ -414,6 +487,8 @@ pipeline {
                                     echo "Maven:"
                                     mvn -version
 
+                                    echo "Running SonarQube..."
+
                                     mvn \
                                         --batch-mode \
                                         --no-transfer-progress \
@@ -421,10 +496,10 @@ pipeline {
                                         -Dliquibase.should.run=false \
                                         -Dmaven.repo.local=/maven-repository \
                                         org.sonarsource.scanner.maven:sonar-maven-plugin:5.2.0.4988:sonar \
-                                        -Dsonar.host.url="http://127.0.0.1:9000" \
+                                        -Dsonar.host.url="$SONAR_HOST_URL" \
                                         -Dsonar.projectKey="snowman-enterprise-monolith" \
                                         -Dsonar.projectName="Snowman Enterprise Monolith" \
-                                        -Dsonar.projectVersion="1.0.${BUILD_NUMBER}" \
+                                        -Dsonar.projectVersion="1.0.$BUILD_NUMBER" \
                                         -Dsonar.token="$SONAR_TOKEN" \
                                         -Dsonar.java.binaries=target/classes \
                                         -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
@@ -438,11 +513,10 @@ pipeline {
         }
 
 
-        /*
-         * ============================================================
-         * OWASP DEPENDENCY AUDIT
-         * ============================================================
-         */
+        // ============================================================
+        // OWASP DEPENDENCY AUDIT
+        // ============================================================
+
         stage('OWASP dependency audit') {
 
             steps {
@@ -453,7 +527,8 @@ pipeline {
 
                         withCredentials([
                             string(
-                                credentialsId: params.NVD_API_CREDENTIALS_ID,
+                                credentialsId:
+                                    params.NVD_API_CREDENTIALS_ID,
                                 variable: 'NVD_API_KEY'
                             )
                         ]) {
@@ -469,10 +544,12 @@ pipeline {
 
                                 mkdir -p "$maven_repo"
 
-                                docker run --rm \
+                                docker run \
+                                    --rm \
                                     --user "$(id -u):$(id -g)" \
                                     --env HOME=/tmp/jenkins-user \
                                     --env NVD_API_KEY="$NVD_API_KEY" \
+                                    --env SECURITY_GATE_MODE="$SECURITY_GATE_MODE" \
                                     --volume "$WORKSPACE:/workspace" \
                                     --volume "$maven_repo:/maven-repository" \
                                     --workdir /workspace \
@@ -481,6 +558,14 @@ pipeline {
                                         set -e
 
                                         mkdir -p /tmp/jenkins-user
+
+                                        if [ "$SECURITY_GATE_MODE" = "strict" ]; then
+                                            CVSS=9.0
+                                        else
+                                            CVSS=11.0
+                                        fi
+
+                                        echo "CVSS failure threshold: $CVSS"
 
                                         mvn \
                                             --batch-mode \
@@ -491,7 +576,7 @@ pipeline {
                                             org.owasp:dependency-check-maven:12.1.8:check \
                                             -DskipTests \
                                             -Dformat=ALL \
-                                            -DfailBuildOnCVSS="$([ "$SECURITY_GATE_MODE" = strict ] && printf 9.0 || printf 11.0)" \
+                                            -DfailBuildOnCVSS="$CVSS" \
                                             -DnvdApiKey="$NVD_API_KEY"
                                     '
                             '''
@@ -499,7 +584,8 @@ pipeline {
 
                     } else {
 
-                        echo 'NVD_API_CREDENTIALS_ID is empty; the initial NVD update may be rate limited.'
+                        echo "NVD API credential not configured."
+                        echo "Running OWASP dependency check without NVD API key."
 
                         sh '''#!/bin/bash
                             set -euo pipefail
@@ -512,9 +598,11 @@ pipeline {
 
                             mkdir -p "$maven_repo"
 
-                            docker run --rm \
+                            docker run \
+                                --rm \
                                 --user "$(id -u):$(id -g)" \
                                 --env HOME=/tmp/jenkins-user \
+                                --env SECURITY_GATE_MODE="$SECURITY_GATE_MODE" \
                                 --volume "$WORKSPACE:/workspace" \
                                 --volume "$maven_repo:/maven-repository" \
                                 --workdir /workspace \
@@ -523,6 +611,12 @@ pipeline {
                                     set -e
 
                                     mkdir -p /tmp/jenkins-user
+
+                                    if [ "$SECURITY_GATE_MODE" = "strict" ]; then
+                                        CVSS=9.0
+                                    else
+                                        CVSS=11.0
+                                    fi
 
                                     mvn \
                                         --batch-mode \
@@ -533,7 +627,7 @@ pipeline {
                                         org.owasp:dependency-check-maven:12.1.8:check \
                                         -DskipTests \
                                         -Dformat=ALL \
-                                        -DfailBuildOnCVSS="$([ "$SECURITY_GATE_MODE" = strict ] && printf 9.0 || printf 11.0)"
+                                        -DfailBuildOnCVSS="$CVSS"
                                 '
                         '''
                     }
@@ -553,11 +647,10 @@ pipeline {
         }
 
 
-        /*
-         * ============================================================
-         * SONARQUBE QUALITY GATE
-         * ============================================================
-         */
+        // ============================================================
+        // SONARQUBE QUALITY GATE
+        // ============================================================
+
         stage('Quality gate') {
 
             steps {
@@ -576,22 +669,41 @@ pipeline {
                         echo "SONARQUBE QUALITY GATE"
                         echo "========================================"
 
-                        task_file=target/sonar/report-task.txt
+                        task_file="target/sonar/report-task.txt"
 
-                        test -s "$task_file"
+                        if [ ! -s "$task_file" ]; then
+
+                            echo "ERROR: SonarQube report-task.txt not found"
+
+                            exit 1
+
+                        fi
 
                         ce_task_url="$(
-                            awk '/^ceTaskUrl=/ {
-                                sub(/^[^=]*=/, "")
-                                print
-                            }' "$task_file"
+                            awk '
+                                /^ceTaskUrl=/ {
+                                    sub(/^[^=]*=/, "")
+                                    print
+                                }
+                            ' "$task_file"
                         )"
 
-                        test -n "$ce_task_url"
+                        if [ -z "$ce_task_url" ]; then
 
-                        analysis_id=''
+                            echo "ERROR: ceTaskUrl not found"
+
+                            exit 1
+
+                        fi
+
+                        echo "SonarQube compute task:"
+                        echo "$ce_task_url"
+
+                        analysis_id=""
 
                         for attempt in $(seq 1 60); do
+
+                            echo "Checking SonarQube task - attempt $attempt/60"
 
                             task_response="$(
                                 curl \
@@ -609,6 +721,8 @@ pipeline {
                                 cut -d'"' -f4
                             )"
 
+                            echo "Task status: $task_status"
+
                             case "$task_status" in
 
                                 SUCCESS)
@@ -625,28 +739,34 @@ pipeline {
 
                                 FAILED|CANCELED)
 
-                                    echo "SonarQube compute task ended with status $task_status" >&2
+                                    echo "SonarQube compute task failed."
+
                                     exit 1
                                     ;;
 
                                 PENDING|IN_PROGRESS)
 
-                                    echo "SonarQube analysis still running..."
                                     sleep 5
                                     ;;
 
                                 *)
 
-                                    echo "Unexpected SonarQube compute-task status: $task_status" >&2
+                                    echo "Unexpected SonarQube status."
+
                                     exit 1
                                     ;;
+
                             esac
+
                         done
 
-                        test -n "$analysis_id" || {
-                            echo 'Timed out waiting for the SonarQube compute task' >&2
+                        if [ -z "$analysis_id" ]; then
+
+                            echo "Timed out waiting for SonarQube."
+
                             exit 1
-                        }
+
+                        fi
 
                         sonar_base_url="${ce_task_url%%/api/ce/task*}"
 
@@ -657,7 +777,8 @@ pipeline {
                                 --show-error \
                                 --user "$SONAR_TOKEN:" \
                                 --get \
-                                --data-urlencode "analysisId=$analysis_id" \
+                                --data-urlencode \
+                                "analysisId=$analysis_id" \
                                 "$sonar_base_url/api/qualitygates/project_status"
                         )"
 
@@ -668,20 +789,27 @@ pipeline {
                             cut -d'"' -f4
                         )"
 
-                        echo "SonarQube quality gate status: $gate_status"
+                        echo "Quality Gate: $gate_status"
 
-                        test "$gate_status" = OK
+                        if [ "$gate_status" != "OK" ]; then
+
+                            echo "ERROR: SonarQube Quality Gate failed."
+
+                            exit 1
+
+                        fi
+
+                        echo "SonarQube Quality Gate PASSED."
                     '''
                 }
             }
         }
 
 
-        /*
-         * ============================================================
-         * VALIDATE DELIVERY CONFIGURATION
-         * ============================================================
-         */
+        // ============================================================
+        // VALIDATE DELIVERY CONFIGURATION
+        // ============================================================
+
         stage('Validate delivery configuration') {
 
             steps {
@@ -693,20 +821,8 @@ pipeline {
                     echo "VALIDATING DOCKER COMPOSE"
                     echo "========================================"
 
-                    if docker compose version >/dev/null 2>&1; then
+                    docker compose config --quiet
 
-                        docker compose config --quiet
-
-                    elif command -v docker-compose >/dev/null 2>&1; then
-
-                        docker-compose config --quiet
-
-                    else
-
-                        echo 'Docker Compose is required on PVM1 (plugin or standalone command)' >&2
-                        exit 1
-
-                    fi
 
                     echo "========================================"
                     echo "GENERATING KUBERNETES MANIFESTS"
@@ -721,6 +837,7 @@ pipeline {
                     kubectl kustomize k8s/jobs \
                         > snowman-migration.yaml
 
+
                     echo "========================================"
                     echo "VALIDATING KUBERNETES MANIFESTS"
                     echo "========================================"
@@ -731,9 +848,11 @@ pipeline {
                         snowman-migration.yaml
                     do
 
-                        echo "Validating $manifest"
+                        echo "Validating: $manifest"
 
-                        docker run --rm -i \
+                        docker run \
+                            --rm \
+                            -i \
                             "$KUBECONFORM_IMAGE" \
                             -strict \
                             -summary \
@@ -746,11 +865,10 @@ pipeline {
         }
 
 
-        /*
-         * ============================================================
-         * BUILD CONTAINER IMAGES
-         * ============================================================
-         */
+        // ============================================================
+        // BUILD CONTAINER IMAGES
+        // ============================================================
+
         stage('Build container images') {
 
             steps {
@@ -759,7 +877,7 @@ pipeline {
                     set -euo pipefail
 
                     echo "========================================"
-                    echo "BUILDING APPLICATION IMAGE"
+                    echo "BUILD APPLICATION IMAGE"
                     echo "========================================"
 
                     docker build \
@@ -768,8 +886,9 @@ pipeline {
                         --label "org.opencontainers.image.version=$IMAGE_TAG" \
                         --file Dockerfile .
 
+
                     echo "========================================"
-                    echo "BUILDING MIGRATION IMAGE"
+                    echo "BUILD MIGRATION IMAGE"
                     echo "========================================"
 
                     docker build \
@@ -782,11 +901,10 @@ pipeline {
         }
 
 
-        /*
-         * ============================================================
-         * TRIVY CONTAINER VULNERABILITY SCAN
-         * ============================================================
-         */
+        // ============================================================
+        // CONTAINER VULNERABILITY SCAN
+        // ============================================================
+
         stage('Container vulnerability scan') {
 
             steps {
@@ -798,9 +916,10 @@ pipeline {
                     echo "TRIVY CONTAINER SCAN"
                     echo "========================================"
 
-                    mkdir -p .trivy-cache
+                    mkdir -p "$WORKSPACE/.trivy-cache"
 
-                    docker run --rm \
+                    docker run \
+                        --rm \
                         --user "$(id -u):$(id -g)" \
                         --group-add "$(stat -c %g /var/run/docker.sock)" \
                         --env HOME=/tmp \
@@ -815,15 +934,18 @@ pipeline {
                         --output /tmp/trivy-cache/trivy-image-report.json \
                         "$APPLICATION_IMAGE:$IMAGE_TAG"
 
-                    cp \
-                        .trivy-cache/trivy-image-report.json \
-                        trivy-image-report.json
 
-                    if [ "$SECURITY_GATE_MODE" = strict ]; then
+                    cp \
+                        "$WORKSPACE/.trivy-cache/trivy-image-report.json" \
+                        "$WORKSPACE/trivy-image-report.json"
+
+
+                    if [ "$SECURITY_GATE_MODE" = "strict" ]; then
 
                         echo "Strict security mode enabled."
 
-                        docker run --rm \
+                        docker run \
+                            --rm \
                             --user "$(id -u):$(id -g)" \
                             --group-add "$(stat -c %g /var/run/docker.sock)" \
                             --env HOME=/tmp \
@@ -839,7 +961,7 @@ pipeline {
 
                     else
 
-                        echo 'Security scans are report-only for this legacy baseline; reports remain archived.'
+                        echo "Security scans are report-only."
 
                     fi
                 '''
@@ -858,16 +980,20 @@ pipeline {
         }
 
 
-        /*
-         * ============================================================
-         * PUBLISH IMAGES TO ACR
-         * ============================================================
-         */
+        // ============================================================
+        // PUBLISH IMAGES TO ACR
+        // ============================================================
+
         stage('Publish images to ACR') {
 
             when {
+
                 expression {
-                    params.DEPLOY_TARGET in ['acr', 'aks']
+
+                    params.DEPLOY_TARGET in [
+                        'acr',
+                        'aks'
+                    ]
                 }
             }
 
@@ -875,14 +1001,21 @@ pipeline {
 
                 script {
 
-                    if (!params.ACR_LOGIN_SERVER?.trim() ||
-                        !params.ACR_CREDENTIALS_ID?.trim()) {
+                    if (!params.ACR_LOGIN_SERVER?.trim()) {
 
                         error(
-                            'ACR_LOGIN_SERVER and ACR_CREDENTIALS_ID are required for ACR/AKS deployment'
+                            'ACR_LOGIN_SERVER is required'
+                        )
+                    }
+
+                    if (!params.ACR_CREDENTIALS_ID?.trim()) {
+
+                        error(
+                            'ACR_CREDENTIALS_ID is required'
                         )
                     }
                 }
+
 
                 withCredentials([
                     usernamePassword(
@@ -908,35 +1041,40 @@ pipeline {
 
                         set -x
 
+
                         echo "========================================"
-                        echo "TAGGING APPLICATION IMAGE"
+                        echo "TAG APPLICATION IMAGE"
                         echo "========================================"
 
                         docker tag \
                             "$APPLICATION_IMAGE:$IMAGE_TAG" \
                             "$ACR_LOGIN_SERVER/$APPLICATION_IMAGE:$IMAGE_TAG"
 
+
                         echo "========================================"
-                        echo "TAGGING MIGRATION IMAGE"
+                        echo "TAG MIGRATION IMAGE"
                         echo "========================================"
 
                         docker tag \
                             "$MIGRATION_IMAGE:$IMAGE_TAG" \
                             "$ACR_LOGIN_SERVER/$MIGRATION_IMAGE:$IMAGE_TAG"
 
+
                         echo "========================================"
-                        echo "PUSHING APPLICATION IMAGE"
+                        echo "PUSH APPLICATION IMAGE"
                         echo "========================================"
 
                         docker push \
                             "$ACR_LOGIN_SERVER/$APPLICATION_IMAGE:$IMAGE_TAG"
 
+
                         echo "========================================"
-                        echo "PUSHING MIGRATION IMAGE"
+                        echo "PUSH MIGRATION IMAGE"
                         echo "========================================"
 
                         docker push \
                             "$ACR_LOGIN_SERVER/$MIGRATION_IMAGE:$IMAGE_TAG"
+
 
                         docker logout "$ACR_LOGIN_SERVER"
                     '''
@@ -945,15 +1083,16 @@ pipeline {
         }
 
 
-        /*
-         * ============================================================
-         * DEPLOY TO AKS
-         * ============================================================
-         */
+        // ============================================================
+        // DEPLOY TO AKS
+        // ============================================================
+
         stage('Deploy to AKS') {
 
             when {
+
                 expression {
+
                     params.DEPLOY_TARGET == 'aks'
                 }
             }
@@ -963,17 +1102,30 @@ pipeline {
                 script {
 
                     def required = [
-                        ACR_LOGIN_SERVER: params.ACR_LOGIN_SERVER,
-                        AKS_RESOURCE_GROUP: params.AKS_RESOURCE_GROUP,
-                        AKS_CLUSTER_NAME: params.AKS_CLUSTER_NAME,
-                        AZURE_TENANT_ID: params.AZURE_TENANT_ID,
-                        AZURE_SUBSCRIPTION_ID: params.AZURE_SUBSCRIPTION_ID
+                        ACR_LOGIN_SERVER:
+                            params.ACR_LOGIN_SERVER,
+
+                        AKS_RESOURCE_GROUP:
+                            params.AKS_RESOURCE_GROUP,
+
+                        AKS_CLUSTER_NAME:
+                            params.AKS_CLUSTER_NAME,
+
+                        AZURE_TENANT_ID:
+                            params.AZURE_TENANT_ID,
+
+                        AZURE_SUBSCRIPTION_ID:
+                            params.AZURE_SUBSCRIPTION_ID
                     ]
+
 
                     def missing =
                         required
-                            .findAll { !it.value?.trim() }
+                            .findAll {
+                                !it.value?.trim()
+                            }
                             .keySet()
+
 
                     if (missing) {
 
@@ -982,14 +1134,21 @@ pipeline {
                         )
                     }
 
+
                     env.DEPLOYMENT_STARTED = 'true'
                 }
 
+
                 withCredentials([
                     usernamePassword(
-                        credentialsId: params.AZURE_CREDENTIALS_ID,
-                        usernameVariable: 'AZURE_CLIENT_ID',
-                        passwordVariable: 'AZURE_CLIENT_SECRET'
+                        credentialsId:
+                            params.AZURE_CREDENTIALS_ID,
+
+                        usernameVariable:
+                            'AZURE_CLIENT_ID',
+
+                        passwordVariable:
+                            'AZURE_CLIENT_SECRET'
                     )
                 ]) {
 
@@ -1011,11 +1170,13 @@ pipeline {
 
                         set -x
 
+
                         az account set \
                             --subscription "$AZURE_SUBSCRIPTION_ID"
 
+
                         echo "========================================"
-                        echo "GETTING AKS CREDENTIALS"
+                        echo "GET AKS CREDENTIALS"
                         echo "========================================"
 
                         az aks get-credentials \
@@ -1023,8 +1184,9 @@ pipeline {
                             --name "$AKS_CLUSTER_NAME" \
                             --overwrite-existing
 
+
                         echo "========================================"
-                        echo "DEPLOYING APPLICATION"
+                        echo "DEPLOY APPLICATION"
                         echo "========================================"
 
                         sed \
@@ -1032,8 +1194,9 @@ pipeline {
                             snowman-production.yaml |
                             kubectl apply -f -
 
+
                         echo "========================================"
-                        echo "REMOVING OLD MIGRATION JOB"
+                        echo "DELETE OLD MIGRATION JOB"
                         echo "========================================"
 
                         kubectl delete job \
@@ -1041,8 +1204,9 @@ pipeline {
                             --namespace snowman \
                             --ignore-not-found=true
 
+
                         echo "========================================"
-                        echo "DEPLOYING DATABASE MIGRATION"
+                        echo "DEPLOY DATABASE MIGRATION"
                         echo "========================================"
 
                         sed \
@@ -1050,8 +1214,9 @@ pipeline {
                             snowman-migration.yaml |
                             kubectl apply -f -
 
+
                         echo "========================================"
-                        echo "WAITING FOR DATABASE MIGRATION"
+                        echo "WAIT FOR DATABASE MIGRATION"
                         echo "========================================"
 
                         if ! kubectl wait \
@@ -1061,7 +1226,7 @@ pipeline {
                             --timeout=5m
                         then
 
-                            echo "Migration failed. Fetching logs..."
+                            echo "Migration failed."
 
                             kubectl logs \
                                 --namespace snowman \
@@ -1069,10 +1234,12 @@ pipeline {
                                 --all-containers=true || true
 
                             exit 1
+
                         fi
 
+
                         echo "========================================"
-                        echo "WAITING FOR APPLICATION ROLLOUT"
+                        echo "WAIT FOR APPLICATION ROLLOUT"
                         echo "========================================"
 
                         kubectl rollout status \
@@ -1080,14 +1247,16 @@ pipeline {
                             deployment/snowman \
                             --timeout=5m
 
+
                         echo "========================================"
-                        echo "CURRENT KUBERNETES RESOURCES"
+                        echo "KUBERNETES RESOURCES"
                         echo "========================================"
 
                         kubectl get \
                             pods,service,ingress \
                             --namespace snowman \
                             -o wide
+
 
                         echo "========================================"
                         echo "APPLICATION SMOKE TEST"
@@ -1097,6 +1266,7 @@ pipeline {
                             "snowman-smoke-$BUILD_NUMBER" \
                             --namespace snowman \
                             --ignore-not-found=true
+
 
                         kubectl run \
                             "snowman-smoke-$BUILD_NUMBER" \
@@ -1114,6 +1284,7 @@ pipeline {
                                 --retry-delay 5 \
                                 http://snowman:8090/health
 
+
                         echo "========================================"
                         echo "AKS DEPLOYMENT SUCCESSFUL"
                         echo "========================================"
@@ -1126,11 +1297,10 @@ pipeline {
     }
 
 
-    /*
-     * ================================================================
-     * POST ACTIONS
-     * ================================================================
-     */
+    // ================================================================
+    // POST ACTIONS
+    // ================================================================
+
     post {
 
         success {
@@ -1161,14 +1331,16 @@ pipeline {
 
             script {
 
-                if (env.DEPLOYMENT_STARTED == 'true' &&
-                    params.DEPLOY_TARGET == 'aks') {
+                if (
+                    env.DEPLOYMENT_STARTED == 'true' &&
+                    params.DEPLOY_TARGET == 'aks'
+                ) {
 
                     sh '''#!/bin/bash
 
                         echo "========================================"
                         echo "DEPLOYMENT FAILED"
-                        echo "ATTEMPTING KUBERNETES ROLLBACK"
+                        echo "ATTEMPTING ROLLBACK"
                         echo "========================================"
 
                         kubectl rollout undo \
@@ -1186,12 +1358,14 @@ pipeline {
 
             archiveArtifacts(
                 allowEmptyArchive: true,
+
                 artifacts:
                     'target/Snowman.jar,' +
                     'target/site/jacoco/jacoco.xml,' +
                     'target/dependency-check-report.*,' +
                     'trivy-image-report.json,' +
                     'snowman-*.yaml',
+
                 fingerprint: true
             )
         }
