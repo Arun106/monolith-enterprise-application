@@ -52,7 +52,7 @@ pipeline {
         string(
             name: 'NVD_API_CREDENTIALS_ID',
             defaultValue: '',
-            description: 'Optional Jenkins secret-text credential containing an NVD API key'
+            description: 'Optional Jenkins secret-text credential containing NVD API key'
         )
 
         choice(
@@ -112,31 +112,38 @@ pipeline {
 
         CI = 'true'
 
-        JAVA_HOME = '/usr/lib/jvm/java-17-openjdk-amd64'
+        MAVEN_IMAGE =
+            'maven:3.9.13-eclipse-temurin-8-noble'
 
-        MAVEN_IMAGE = 'maven:3.9.13-eclipse-temurin-8-noble'
+        SONARQUBE_ENV =
+            'naukri-sonarqube'
 
-        SONARQUBE_ENV = 'naukri-sonarqube'
+        SONAR_CREDENTIALS_ID =
+            'sonarqube-snowman-token'
 
-        SONAR_CREDENTIALS_ID = 'sonarqube-snowman-token'
+        PVM1_SONAR_URL =
+            'http://127.0.0.1:9000'
 
-        PVM1_SONAR_URL = 'http://127.0.0.1:9000'
+        SONAR_PROJECT_KEY =
+            'snowman-enterprise-monolith'
 
-        SONAR_PROJECT_KEY = 'snowman-enterprise-monolith'
+        APPLICATION_IMAGE =
+            'monolith-enterprise-application'
 
-        APPLICATION_IMAGE = 'monolith-enterprise-application'
+        MIGRATION_IMAGE =
+            'monolith-enterprise-application-migration'
 
-        MIGRATION_IMAGE = 'monolith-enterprise-application-migration'
+        KUBECONFORM_IMAGE =
+            'ghcr.io/yannh/kubeconform:v0.7.0'
 
-        KUBECONFORM_IMAGE = 'ghcr.io/yannh/kubeconform:v0.7.0'
+        TRIVY_IMAGE =
+            'aquasec/trivy:0.65.0'
 
-        TRIVY_IMAGE = 'aquasec/trivy:0.65.0'
+        DEPLOYMENT_STARTED =
+            'false'
 
-        DOCKER_COMPOSE_VERSION = '2.39.2'
-
-        DEPLOYMENT_STARTED = 'false'
-
-        SECURITY_GATE_MODE = "${params.SECURITY_GATE_MODE ?: 'report-only'}"
+        SECURITY_GATE_MODE =
+            "${params.SECURITY_GATE_MODE ?: 'report-only'}"
     }
 
 
@@ -186,82 +193,22 @@ pipeline {
                     set -eu
 
                     echo "========================================"
-                    echo "AGENT INFORMATION"
+                    echo "AGENT PREREQUISITES"
                     echo "========================================"
 
-                    echo "User: $(whoami)"
-                    echo "UID: $(id -u)"
-                    echo "GID: $(id -g)"
-                    echo "HOME: $HOME"
-                    echo "WORKSPACE: $WORKSPACE"
-
-
-                    echo "========================================"
-                    echo "CHECKING REQUIRED COMMANDS"
-                    echo "========================================"
-
-                    for command in git docker curl java kubectl az
-                    do
-                        if ! command -v "$command" >/dev/null 2>&1
-                        then
-                            echo "ERROR: Required command not found: $command"
-                            echo "Install $command on Jenkins agent PVM1."
-                            exit 1
-                        fi
-                    done
-
-
-                    echo "========================================"
-                    echo "CHECKING DOCKER COMPOSE"
-                    echo "========================================"
-
-                    if ! docker compose version >/dev/null 2>&1
+                    if [ ! -f scripts/prerequisites.sh ]
                     then
-                        echo "ERROR: Docker Compose plugin not available."
+                        echo "ERROR:"
+                        echo "scripts/prerequisites.sh not found."
                         exit 1
                     fi
 
+                    chmod +x scripts/prerequisites.sh
+
+                    ./scripts/prerequisites.sh
 
                     echo "========================================"
-                    echo "CHECKING KUBECTL KUSTOMIZE"
-                    echo "========================================"
-
-                    if ! kubectl kustomize --help >/dev/null 2>&1
-                    then
-                        echo "ERROR: kubectl kustomize is not available."
-                        echo "Upgrade/install a kubectl version with Kustomize support."
-                        exit 1
-                    fi
-
-
-                    echo "========================================"
-                    echo "TOOL VERSIONS"
-                    echo "========================================"
-
-                    echo "--- Git ---"
-                    git --version
-
-                    echo "--- Docker ---"
-                    docker --version
-
-                    echo "--- Docker Compose ---"
-                    docker compose version
-
-                    echo "--- Java ---"
-                    java -version
-
-                    echo "--- Kubectl ---"
-                    kubectl version --client
-
-                    echo "--- Kubectl Kustomize ---"
-                    kubectl kustomize --help | head -20
-
-                    echo "--- Azure CLI ---"
-                    az version
-
-
-                    echo "========================================"
-                    echo "AGENT PREREQUISITES PASSED"
+                    echo "PREREQUISITES COMPLETED"
                     echo "========================================"
                 '''
             }
@@ -363,16 +310,9 @@ pipeline {
 
                     test -s target/site/jacoco/jacoco.xml
 
-                    echo "Snowman.jar:"
                     ls -lh target/Snowman.jar
 
-                    echo "Jacoco report:"
                     ls -lh target/site/jacoco/jacoco.xml
-
-
-                    echo "========================================"
-                    echo "BUILD AND UNIT TEST SUCCESSFUL"
-                    echo "========================================"
                 '''
             }
 
@@ -391,7 +331,7 @@ pipeline {
 
 
         // ============================================================
-        // SONARQUBE
+        // SONARQUBE ANALYSIS
         // ============================================================
 
         stage('SonarQube analysis') {
@@ -402,8 +342,11 @@ pipeline {
 
                     withCredentials([
                         string(
-                            credentialsId: env.SONAR_CREDENTIALS_ID,
-                            variable: 'SONAR_TOKEN'
+                            credentialsId:
+                                env.SONAR_CREDENTIALS_ID,
+
+                            variable:
+                                'SONAR_TOKEN'
                         )
                     ]) {
 
@@ -421,6 +364,7 @@ pipeline {
 
                             docker run \
                                 --rm \
+                                --network host \
                                 --user "$(id -u):$(id -g)" \
                                 --env HOME=/tmp/jenkins-user \
                                 --env MAVEN_CONFIG=/maven-repository \
@@ -434,13 +378,9 @@ pipeline {
                                 sh -c '
                                     set -e
 
-                                    mkdir -p /tmp/jenkins-user
-
                                     java -version
 
                                     mvn -version
-
-                                    echo "Running SonarQube..."
 
 
                                     mvn \
@@ -458,9 +398,6 @@ pipeline {
                                         -Dsonar.java.binaries=target/classes \
                                         -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
                                 '
-
-
-                            echo "SonarQube analysis completed."
                         '''
                     }
                 }
@@ -469,7 +406,7 @@ pipeline {
 
 
         // ============================================================
-        // OWASP DEPENDENCY AUDIT
+        // OWASP DEPENDENCY CHECK
         // ============================================================
 
         stage('OWASP dependency audit') {
@@ -478,13 +415,17 @@ pipeline {
 
                 script {
 
-                    if (params.NVD_API_CREDENTIALS_ID?.trim()) {
+                    if (
+                        params.NVD_API_CREDENTIALS_ID?.trim()
+                    ) {
 
                         withCredentials([
                             string(
                                 credentialsId:
                                     params.NVD_API_CREDENTIALS_ID,
-                                variable: 'NVD_API_KEY'
+
+                                variable:
+                                    'NVD_API_KEY'
                             )
                         ]) {
 
@@ -514,18 +455,12 @@ pipeline {
                                     sh -c '
                                         set -e
 
-                                        mkdir -p /tmp/jenkins-user
-
-
                                         if [ "$SECURITY_GATE_MODE" = "strict" ]
                                         then
                                             CVSS=9.0
                                         else
                                             CVSS=11.0
                                         fi
-
-
-                                        echo "CVSS failure threshold: $CVSS"
 
 
                                         mvn \
@@ -544,10 +479,6 @@ pipeline {
                         }
 
                     } else {
-
-                        echo "NVD API credential not configured."
-                        echo "Running OWASP dependency check without NVD API key."
-
 
                         sh '''
                             set -eu
@@ -574,18 +505,12 @@ pipeline {
                                 sh -c '
                                     set -e
 
-                                    mkdir -p /tmp/jenkins-user
-
-
                                     if [ "$SECURITY_GATE_MODE" = "strict" ]
                                     then
                                         CVSS=9.0
                                     else
                                         CVSS=11.0
                                     fi
-
-
-                                    echo "CVSS failure threshold: $CVSS"
 
 
                                     mvn \
@@ -610,7 +535,8 @@ pipeline {
 
                     archiveArtifacts(
                         allowEmptyArchive: true,
-                        artifacts: 'target/dependency-check-report.*'
+                        artifacts:
+                            'target/dependency-check-report.*'
                     )
                 }
             }
@@ -618,7 +544,7 @@ pipeline {
 
 
         // ============================================================
-        // SONARQUBE QUALITY GATE
+        // SONAR QUALITY GATE
         // ============================================================
 
         stage('Quality gate') {
@@ -627,8 +553,11 @@ pipeline {
 
                 withCredentials([
                     string(
-                        credentialsId: env.SONAR_CREDENTIALS_ID,
-                        variable: 'SONAR_TOKEN'
+                        credentialsId:
+                            env.SONAR_CREDENTIALS_ID,
+
+                        variable:
+                            'SONAR_TOKEN'
                     )
                 ]) {
 
@@ -639,13 +568,12 @@ pipeline {
                         echo "SONARQUBE QUALITY GATE"
                         echo "========================================"
 
-
                         task_file="target/sonar/report-task.txt"
 
 
                         if [ ! -s "$task_file" ]
                         then
-                            echo "ERROR: SonarQube report-task.txt not found"
+                            echo "ERROR: Sonar report-task.txt missing."
                             exit 1
                         fi
 
@@ -662,13 +590,9 @@ pipeline {
 
                         if [ -z "$ce_task_url" ]
                         then
-                            echo "ERROR: ceTaskUrl not found"
+                            echo "ERROR: ceTaskUrl missing."
                             exit 1
                         fi
-
-
-                        echo "SonarQube compute task:"
-                        echo "$ce_task_url"
 
 
                         analysis_id=""
@@ -677,7 +601,7 @@ pipeline {
                         for attempt in $(seq 1 60)
                         do
 
-                            echo "Checking SonarQube task - attempt $attempt/60"
+                            echo "Sonar task attempt $attempt/60"
 
 
                             task_response="$(
@@ -698,7 +622,7 @@ pipeline {
                             )"
 
 
-                            echo "Task status: $task_status"
+                            echo "Status: $task_status"
 
 
                             case "$task_status" in
@@ -717,7 +641,7 @@ pipeline {
 
                                 FAILED|CANCELED)
 
-                                    echo "SonarQube compute task failed."
+                                    echo "Sonar task failed."
                                     exit 1
                                     ;;
 
@@ -728,7 +652,7 @@ pipeline {
 
                                 *)
 
-                                    echo "Unexpected SonarQube status."
+                                    echo "Unexpected Sonar status."
                                     exit 1
                                     ;;
 
@@ -739,7 +663,7 @@ pipeline {
 
                         if [ -z "$analysis_id" ]
                         then
-                            echo "Timed out waiting for SonarQube."
+                            echo "SonarQube timeout."
                             exit 1
                         fi
 
@@ -773,12 +697,9 @@ pipeline {
 
                         if [ "$gate_status" != "OK" ]
                         then
-                            echo "ERROR: SonarQube Quality Gate failed."
+                            echo "ERROR: Quality Gate failed."
                             exit 1
                         fi
-
-
-                        echo "SonarQube Quality Gate PASSED."
                     '''
                 }
             }
@@ -807,14 +728,16 @@ pipeline {
                     echo "GENERATING KUBERNETES MANIFESTS"
                     echo "========================================"
 
-
-                    kubectl kustomize k8s/overlays/dev \
+                    kubectl kustomize \
+                        k8s/overlays/dev \
                         > snowman-dev.yaml
 
-                    kubectl kustomize k8s/overlays/production \
+                    kubectl kustomize \
+                        k8s/overlays/production \
                         > snowman-production.yaml
 
-                    kubectl kustomize k8s/jobs \
+                    kubectl kustomize \
+                        k8s/jobs \
                         > snowman-migration.yaml
 
 
@@ -822,15 +745,13 @@ pipeline {
                     echo "VALIDATING KUBERNETES MANIFESTS"
                     echo "========================================"
 
-
                     for manifest in \
                         snowman-dev.yaml \
                         snowman-production.yaml \
                         snowman-migration.yaml
                     do
 
-                        echo "Validating: $manifest"
-
+                        echo "Validating $manifest"
 
                         docker run \
                             --rm \
@@ -842,11 +763,6 @@ pipeline {
                             < "$manifest"
 
                     done
-
-
-                    echo "========================================"
-                    echo "DELIVERY CONFIGURATION VALIDATED"
-                    echo "========================================"
                 '''
             }
         }
@@ -867,7 +783,6 @@ pipeline {
                     echo "BUILD APPLICATION IMAGE"
                     echo "========================================"
 
-
                     docker build \
                         --tag "$APPLICATION_IMAGE:$IMAGE_TAG" \
                         --label "org.opencontainers.image.revision=$GIT_COMMIT" \
@@ -878,7 +793,6 @@ pipeline {
                     echo "========================================"
                     echo "BUILD MIGRATION IMAGE"
                     echo "========================================"
-
 
                     docker build \
                         --tag "$MIGRATION_IMAGE:$IMAGE_TAG" \
@@ -891,7 +805,7 @@ pipeline {
 
 
         // ============================================================
-        // CONTAINER VULNERABILITY SCAN
+        // TRIVY IMAGE SCAN
         // ============================================================
 
         stage('Container vulnerability scan') {
@@ -902,9 +816,8 @@ pipeline {
                     set -eu
 
                     echo "========================================"
-                    echo "TRIVY CONTAINER SCAN"
+                    echo "TRIVY IMAGE SCAN"
                     echo "========================================"
-
 
                     mkdir -p "$WORKSPACE/.trivy-cache"
 
@@ -934,9 +847,6 @@ pipeline {
                     if [ "$SECURITY_GATE_MODE" = "strict" ]
                     then
 
-                        echo "Strict security mode enabled."
-
-
                         docker run \
                             --rm \
                             --user "$(id -u):$(id -g)" \
@@ -952,10 +862,6 @@ pipeline {
                             --exit-code 1 \
                             "$APPLICATION_IMAGE:$IMAGE_TAG"
 
-                    else
-
-                        echo "Security scans are report-only."
-
                     fi
                 '''
             }
@@ -966,7 +872,8 @@ pipeline {
 
                     archiveArtifacts(
                         allowEmptyArchive: true,
-                        artifacts: 'trivy-image-report.json'
+                        artifacts:
+                            'trivy-image-report.json'
                     )
                 }
             }
@@ -974,7 +881,7 @@ pipeline {
 
 
         // ============================================================
-        // PUBLISH IMAGES TO ACR
+        // PUSH IMAGES TO ACR
         // ============================================================
 
         stage('Publish images to ACR') {
@@ -992,31 +899,19 @@ pipeline {
 
             steps {
 
-                script {
-
-                    if (!params.ACR_LOGIN_SERVER?.trim()) {
-
-                        error(
-                            'ACR_LOGIN_SERVER is required'
-                        )
-                    }
-
-
-                    if (!params.ACR_CREDENTIALS_ID?.trim()) {
-
-                        error(
-                            'ACR_CREDENTIALS_ID is required'
-                        )
-                    }
-                }
-
-
                 withCredentials([
+
                     usernamePassword(
-                        credentialsId: params.ACR_CREDENTIALS_ID,
-                        usernameVariable: 'ACR_USERNAME',
-                        passwordVariable: 'ACR_PASSWORD'
+                        credentialsId:
+                            params.ACR_CREDENTIALS_ID,
+
+                        usernameVariable:
+                            'ACR_USERNAME',
+
+                        passwordVariable:
+                            'ACR_PASSWORD'
                     )
+
                 ]) {
 
                     sh '''
@@ -1026,32 +921,24 @@ pipeline {
                         echo "LOGIN TO ACR"
                         echo "========================================"
 
-
                         set +x
 
-
                         printf '%s' "$ACR_PASSWORD" |
-                            docker login "$ACR_LOGIN_SERVER" \
+                            docker login \
+                                "$ACR_LOGIN_SERVER" \
                                 --username "$ACR_USERNAME" \
                                 --password-stdin
-
 
                         set -x
 
 
                         echo "========================================"
-                        echo "TAG APPLICATION IMAGE"
+                        echo "TAG IMAGES"
                         echo "========================================"
-
 
                         docker tag \
                             "$APPLICATION_IMAGE:$IMAGE_TAG" \
                             "$ACR_LOGIN_SERVER/$APPLICATION_IMAGE:$IMAGE_TAG"
-
-
-                        echo "========================================"
-                        echo "TAG MIGRATION IMAGE"
-                        echo "========================================"
 
 
                         docker tag \
@@ -1063,7 +950,6 @@ pipeline {
                         echo "PUSH APPLICATION IMAGE"
                         echo "========================================"
 
-
                         docker push \
                             "$ACR_LOGIN_SERVER/$APPLICATION_IMAGE:$IMAGE_TAG"
 
@@ -1072,12 +958,12 @@ pipeline {
                         echo "PUSH MIGRATION IMAGE"
                         echo "========================================"
 
-
                         docker push \
                             "$ACR_LOGIN_SERVER/$MIGRATION_IMAGE:$IMAGE_TAG"
 
 
-                        docker logout "$ACR_LOGIN_SERVER"
+                        docker logout \
+                            "$ACR_LOGIN_SERVER"
                     '''
                 }
             }
@@ -1093,7 +979,6 @@ pipeline {
             when {
 
                 expression {
-
                     params.DEPLOY_TARGET == 'aks'
                 }
             }
@@ -1101,41 +986,6 @@ pipeline {
             steps {
 
                 script {
-
-                    def required = [
-
-                        ACR_LOGIN_SERVER:
-                            params.ACR_LOGIN_SERVER,
-
-                        AKS_RESOURCE_GROUP:
-                            params.AKS_RESOURCE_GROUP,
-
-                        AKS_CLUSTER_NAME:
-                            params.AKS_CLUSTER_NAME,
-
-                        AZURE_TENANT_ID:
-                            params.AZURE_TENANT_ID,
-
-                        AZURE_SUBSCRIPTION_ID:
-                            params.AZURE_SUBSCRIPTION_ID
-                    ]
-
-
-                    def missing =
-                        required
-                            .findAll {
-                                !it.value?.trim()
-                            }
-                            .keySet()
-
-
-                    if (missing) {
-
-                        error(
-                            "Missing AKS parameters: ${missing.join(', ')}"
-                        )
-                    }
-
 
                     env.DEPLOYMENT_STARTED = 'true'
                 }
@@ -1163,9 +1013,7 @@ pipeline {
                         echo "AZURE LOGIN"
                         echo "========================================"
 
-
                         set +x
-
 
                         az login \
                             --service-principal \
@@ -1174,18 +1022,17 @@ pipeline {
                             --tenant "$AZURE_TENANT_ID" \
                             >/dev/null
 
-
                         set -x
 
 
                         az account set \
-                            --subscription "$AZURE_SUBSCRIPTION_ID"
+                            --subscription \
+                            "$AZURE_SUBSCRIPTION_ID"
 
 
                         echo "========================================"
                         echo "GET AKS CREDENTIALS"
                         echo "========================================"
-
 
                         az aks get-credentials \
                             --resource-group "$AKS_RESOURCE_GROUP" \
@@ -1197,7 +1044,6 @@ pipeline {
                         echo "DEPLOY APPLICATION"
                         echo "========================================"
 
-
                         sed \
                             "s#ghcr.io/adikarthik/monolith-enterprise-application:latest#$ACR_LOGIN_SERVER/$APPLICATION_IMAGE:$IMAGE_TAG#g" \
                             snowman-production.yaml |
@@ -1208,7 +1054,6 @@ pipeline {
                         echo "DELETE OLD MIGRATION JOB"
                         echo "========================================"
 
-
                         kubectl delete job \
                             snowman-database-migration \
                             --namespace snowman \
@@ -1216,9 +1061,8 @@ pipeline {
 
 
                         echo "========================================"
-                        echo "DEPLOY DATABASE MIGRATION"
+                        echo "RUN DATABASE MIGRATION"
                         echo "========================================"
-
 
                         sed \
                             "s#ghcr.io/adikarthik/monolith-enterprise-application-migration:latest#$ACR_LOGIN_SERVER/$MIGRATION_IMAGE:$IMAGE_TAG#g" \
@@ -1230,7 +1074,6 @@ pipeline {
                         echo "WAIT FOR DATABASE MIGRATION"
                         echo "========================================"
 
-
                         if ! kubectl wait \
                             --namespace snowman \
                             --for=condition=complete \
@@ -1240,21 +1083,18 @@ pipeline {
 
                             echo "Migration failed."
 
-
                             kubectl logs \
                                 --namespace snowman \
                                 job/snowman-database-migration \
                                 --all-containers=true || true
-
 
                             exit 1
                         fi
 
 
                         echo "========================================"
-                        echo "WAIT FOR APPLICATION ROLLOUT"
+                        echo "WAIT FOR APPLICATION"
                         echo "========================================"
-
 
                         kubectl rollout status \
                             --namespace snowman \
@@ -1266,7 +1106,6 @@ pipeline {
                         echo "KUBERNETES RESOURCES"
                         echo "========================================"
 
-
                         kubectl get \
                             pods,service,ingress \
                             --namespace snowman \
@@ -1276,7 +1115,6 @@ pipeline {
                         echo "========================================"
                         echo "APPLICATION SMOKE TEST"
                         echo "========================================"
-
 
                         kubectl delete pod \
                             "snowman-smoke-$BUILD_NUMBER" \
@@ -1359,13 +1197,12 @@ pipeline {
                         echo "ATTEMPTING ROLLBACK"
                         echo "========================================"
 
-
                         kubectl rollout undo \
                             --namespace snowman \
                             deployment/snowman || true
 
-
-                        az logout >/dev/null 2>&1 || true
+                        az logout \
+                            >/dev/null 2>&1 || true
                     '''
                 }
             }
