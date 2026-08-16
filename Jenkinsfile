@@ -35,7 +35,7 @@ pipeline {
 
         string(
             name: 'REPOSITORY_BRANCH',
-            defaultValue: 'master',
+            defaultValue: 'agent/jenkins-aks-cicd',
             description: 'Git branch to build'
         )
 
@@ -200,18 +200,6 @@ pipeline {
                     echo "CHECKING REQUIRED COMMANDS"
                     echo "========================================"
 
-                    #
-                    # IMPORTANT:
-                    #
-                    # Standalone kustomize is NOT required.
-                    #
-                    # kubectl already provides:
-                    #
-                    #     kubectl kustomize
-                    #
-                    # Therefore we check kubectl instead of kustomize.
-                    #
-
                     for command in git docker curl java kubectl az
                     do
                         if ! command -v "$command" >/dev/null 2>&1
@@ -324,6 +312,7 @@ pipeline {
                         --rm \
                         --user "$(id -u):$(id -g)" \
                         --env HOME=/tmp/jenkins-user \
+                        --env MAVEN_CONFIG=/maven-repository \
                         --volume "$WORKSPACE:/workspace" \
                         --volume "$maven_repo:/maven-repository" \
                         --workdir /workspace \
@@ -434,6 +423,7 @@ pipeline {
                                 --rm \
                                 --user "$(id -u):$(id -g)" \
                                 --env HOME=/tmp/jenkins-user \
+                                --env MAVEN_CONFIG=/maven-repository \
                                 --env SONAR_TOKEN="$SONAR_TOKEN" \
                                 --env SONAR_HOST_URL="$PVM1_SONAR_URL" \
                                 --env BUILD_NUMBER="$BUILD_NUMBER" \
@@ -514,6 +504,7 @@ pipeline {
                                     --rm \
                                     --user "$(id -u):$(id -g)" \
                                     --env HOME=/tmp/jenkins-user \
+                                    --env MAVEN_CONFIG=/maven-repository \
                                     --env NVD_API_KEY="$NVD_API_KEY" \
                                     --env SECURITY_GATE_MODE="$SECURITY_GATE_MODE" \
                                     --volume "$WORKSPACE:/workspace" \
@@ -574,6 +565,7 @@ pipeline {
                                 --rm \
                                 --user "$(id -u):$(id -g)" \
                                 --env HOME=/tmp/jenkins-user \
+                                --env MAVEN_CONFIG=/maven-repository \
                                 --env SECURITY_GATE_MODE="$SECURITY_GATE_MODE" \
                                 --volume "$WORKSPACE:/workspace" \
                                 --volume "$maven_repo:/maven-repository" \
@@ -814,19 +806,6 @@ pipeline {
                     echo "========================================"
                     echo "GENERATING KUBERNETES MANIFESTS"
                     echo "========================================"
-
-                    #
-                    # IMPORTANT:
-                    #
-                    # We intentionally use:
-                    #
-                    #     kubectl kustomize
-                    #
-                    # instead of:
-                    #
-                    #     kustomize
-                    #
-                    #
 
 
                     kubectl kustomize k8s/overlays/dev \
