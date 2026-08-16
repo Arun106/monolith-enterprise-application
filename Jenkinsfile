@@ -105,19 +105,13 @@ pipeline {
 
         CI = 'true'
 
-        /*
-         * Host Java is only used for Jenkins/agent utilities.
-         * Maven runs inside Docker.
-         */
         JAVA_HOME = '/usr/lib/jvm/java-17-openjdk-amd64'
 
         /*
-         * IMPORTANT:
-         *
          * Do NOT define PATH here.
-         *
          * Jenkins already has a working PATH.
          */
+
         MAVEN_IMAGE = 'maven:3.9.13-eclipse-temurin-8-noble'
 
         SONARQUBE_ENV = 'naukri-sonarqube'
@@ -216,11 +210,12 @@ pipeline {
 
                     done
 
-                    /*
-                     * Install kubectl for the Jenkins user if missing.
-                     */
+
+                    # Install kubectl if it is missing.
 
                     if ! command -v kubectl >/dev/null 2>&1; then
+
+                        echo "kubectl not found. Installing..."
 
                         mkdir -p "$HOME/.local/bin"
 
@@ -237,11 +232,11 @@ pipeline {
                     fi
 
 
-                    /*
-                     * Install Docker Compose plugin if missing.
-                     */
+                    # Install Docker Compose if it is missing.
 
                     if ! docker compose version >/dev/null 2>&1; then
+
+                        echo "Docker Compose not found. Installing..."
 
                         mkdir -p "$HOME/.docker/cli-plugins"
 
@@ -258,9 +253,7 @@ pipeline {
                     fi
 
 
-                    /*
-                     * Azure CLI is required only for AKS deployment.
-                     */
+                    # Azure CLI is required only for AKS deployment.
 
                     if [ "${DEPLOY_TARGET:-none}" = "aks" ]; then
 
@@ -288,6 +281,17 @@ pipeline {
                     java -version
 
                     kubectl version --client
+
+                    if [ "${DEPLOY_TARGET:-none}" = "aks" ]; then
+
+                        az version --output table
+
+                    fi
+
+
+                    echo "========================================"
+                    echo "AGENT PREREQUISITES PASSED"
+                    echo "========================================"
                 '''
             }
         }
@@ -295,16 +299,6 @@ pipeline {
 
         // ============================================================
         // BUILD AND UNIT TEST
-        //
-        // Maven runs ONLY inside Docker.
-        //
-        // Host:
-        //   $WORKSPACE/.m2
-        //
-        // Container:
-        //   /maven-repository
-        //
-        // This prevents /root/.m2 permission problems.
         // ============================================================
 
         stage('Build and unit test') {
@@ -325,6 +319,7 @@ pipeline {
                     echo "WORKSPACE: $WORKSPACE"
                     echo "MAVEN_IMAGE: $MAVEN_IMAGE"
 
+
                     echo "========================================"
                     echo "PREPARING MAVEN REPOSITORY"
                     echo "========================================"
@@ -339,6 +334,7 @@ pipeline {
 
                     echo "Maven repository:"
                     echo "$maven_repo"
+
 
                     echo "========================================"
                     echo "STARTING MAVEN CONTAINER"
@@ -367,11 +363,13 @@ pipeline {
                             echo "HOME:"
                             echo "$HOME"
 
+
                             echo "========================================"
                             echo "JAVA VERSION"
                             echo "========================================"
 
                             java -version
+
 
                             echo "========================================"
                             echo "MAVEN VERSION"
@@ -379,11 +377,13 @@ pipeline {
 
                             mvn -version
 
+
                             echo "========================================"
                             echo "MAVEN REPOSITORY"
                             echo "========================================"
 
                             ls -ld /maven-repository
+
 
                             echo "========================================"
                             echo "RUNNING MAVEN"
@@ -396,6 +396,7 @@ pipeline {
                                 -Dliquibase.should.run=false \
                                 -Dmaven.repo.local=/maven-repository \
                                 clean verify
+
 
                             echo "========================================"
                             echo "MAVEN BUILD SUCCESSFUL"
@@ -416,6 +417,7 @@ pipeline {
 
                     echo "Jacoco report:"
                     ls -lh target/site/jacoco/jacoco.xml
+
 
                     echo "========================================"
                     echo "BUILD AND UNIT TEST SUCCESSFUL"
@@ -438,7 +440,7 @@ pipeline {
 
 
         // ============================================================
-        // SONARQUBE
+        // SONARQUBE ANALYSIS
         // ============================================================
 
         stage('SonarQube analysis') {
@@ -465,6 +467,7 @@ pipeline {
 
                             mkdir -p "$maven_repo"
 
+
                             docker run \
                                 --rm \
                                 --user "$(id -u):$(id -g)" \
@@ -481,13 +484,9 @@ pipeline {
 
                                     mkdir -p /tmp/jenkins-user
 
-                                    echo "Java:"
                                     java -version
 
-                                    echo "Maven:"
                                     mvn -version
-
-                                    echo "Running SonarQube..."
 
                                     mvn \
                                         --batch-mode \
@@ -544,6 +543,7 @@ pipeline {
 
                                 mkdir -p "$maven_repo"
 
+
                                 docker run \
                                     --rm \
                                     --user "$(id -u):$(id -g)" \
@@ -564,8 +564,6 @@ pipeline {
                                         else
                                             CVSS=11.0
                                         fi
-
-                                        echo "CVSS failure threshold: $CVSS"
 
                                         mvn \
                                             --batch-mode \
@@ -597,6 +595,7 @@ pipeline {
                             maven_repo="$WORKSPACE/.m2"
 
                             mkdir -p "$maven_repo"
+
 
                             docker run \
                                 --rm \
@@ -648,7 +647,7 @@ pipeline {
 
 
         // ============================================================
-        // SONARQUBE QUALITY GATE
+        // QUALITY GATE
         // ============================================================
 
         stage('Quality gate') {
@@ -679,6 +678,7 @@ pipeline {
 
                         fi
 
+
                         ce_task_url="$(
                             awk '
                                 /^ceTaskUrl=/ {
@@ -688,6 +688,7 @@ pipeline {
                             ' "$task_file"
                         )"
 
+
                         if [ -z "$ce_task_url" ]; then
 
                             echo "ERROR: ceTaskUrl not found"
@@ -696,8 +697,6 @@ pipeline {
 
                         fi
 
-                        echo "SonarQube compute task:"
-                        echo "$ce_task_url"
 
                         analysis_id=""
 
@@ -714,6 +713,7 @@ pipeline {
                                     "$ce_task_url"
                             )"
 
+
                             task_status="$(
                                 printf '%s' "$task_response" |
                                 grep -o '"status":"[^"]*"' |
@@ -721,7 +721,9 @@ pipeline {
                                 cut -d'"' -f4
                             )"
 
+
                             echo "Task status: $task_status"
+
 
                             case "$task_status" in
 
@@ -760,6 +762,7 @@ pipeline {
 
                         done
 
+
                         if [ -z "$analysis_id" ]; then
 
                             echo "Timed out waiting for SonarQube."
@@ -768,7 +771,9 @@ pipeline {
 
                         fi
 
+
                         sonar_base_url="${ce_task_url%%/api/ce/task*}"
+
 
                         gate_response="$(
                             curl \
@@ -782,6 +787,7 @@ pipeline {
                                 "$sonar_base_url/api/qualitygates/project_status"
                         )"
 
+
                         gate_status="$(
                             printf '%s' "$gate_response" |
                             grep -o '"status":"[^"]*"' |
@@ -789,7 +795,9 @@ pipeline {
                             cut -d'"' -f4
                         )"
 
+
                         echo "Quality Gate: $gate_status"
+
 
                         if [ "$gate_status" != "OK" ]; then
 
@@ -798,6 +806,7 @@ pipeline {
                             exit 1
 
                         fi
+
 
                         echo "SonarQube Quality Gate PASSED."
                     '''
@@ -917,6 +926,7 @@ pipeline {
                     echo "========================================"
 
                     mkdir -p "$WORKSPACE/.trivy-cache"
+
 
                     docker run \
                         --rm \
