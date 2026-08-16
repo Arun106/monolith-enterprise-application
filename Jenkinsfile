@@ -133,8 +133,9 @@ pipeline {
             steps {
                 sh '''#!/bin/bash
                     set -euo pipefail
-                    maven_repo="$WORKSPACE/.m2/repository"
-                    mkdir -p "$maven_repo"
+                    host_maven_repo="$WORKSPACE/.m2/repository"
+                    container_maven_repo="/workspace/.m2/repository"
+                    mkdir -p "$host_maven_repo"
                     docker run --rm \
                         --user "$(id -u):$(id -g)" \
                         --group-add "$(stat -c %g /var/run/docker.sock)" \
@@ -144,7 +145,7 @@ pipeline {
                         "$MAVEN_IMAGE" \
                         mvn --batch-mode --no-transfer-progress \
                             -Dliquibase.should.run=false \
-                            -Dmaven.repo.local="$maven_repo" \
+                            -Dmaven.repo.local="$container_maven_repo" \
                             clean verify
                     test -s target/Snowman.jar
                     test -s target/site/jacoco/jacoco.xml
