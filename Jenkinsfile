@@ -144,7 +144,7 @@ pipeline {
                         --workdir /workspace \
                         "$MAVEN_IMAGE" \
                         mvn --batch-mode --no-transfer-progress \
-                            -Dliquibase.skip=true \
+                            -Dliquibase.should.run=false \
                             -Dmaven.repo.local=/tmp/jenkins-user/.m2/repository \
                             clean verify
                     test -s target/Snowman.jar
@@ -169,7 +169,7 @@ pipeline {
                         sh '''#!/bin/bash
                             set -euo pipefail
                             mvn --batch-mode --no-transfer-progress \
-                                -Dliquibase.skip=true \
+                                -Dliquibase.should.run=false \
                                 org.sonarsource.scanner.maven:sonar-maven-plugin:5.2.0.4988:sonar \
                                 -Dsonar.host.url="$PVM1_SONAR_URL" \
                                 -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
@@ -195,7 +195,7 @@ pipeline {
                             sh '''#!/bin/bash
                                 set -euo pipefail
                                 mvn --batch-mode --no-transfer-progress \
-                                    -Dliquibase.skip=true \
+                                    -Dliquibase.should.run=false \
                                     org.owasp:dependency-check-maven:12.1.8:check \
                                     -DskipTests \
                                     -Dformat=ALL \
@@ -208,7 +208,7 @@ pipeline {
                         sh '''#!/bin/bash
                             set -euo pipefail
                             mvn --batch-mode --no-transfer-progress \
-                                -Dliquibase.skip=true \
+                                -Dliquibase.should.run=false \
                                 org.owasp:dependency-check-maven:12.1.8:check \
                                 -DskipTests \
                                 -Dformat=ALL \
