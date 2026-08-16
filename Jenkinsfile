@@ -133,10 +133,9 @@ pipeline {
             steps {
                 sh '''#!/bin/bash
                     set -euo pipefail
-                    host_maven_repo="$WORKSPACE/.m2/repository"
-                    container_maven_repo="/workspace/.m2/repository"
-                    rm -rf "$host_maven_repo"
-                    mkdir -p "$host_maven_repo"
+                    maven_repo="/tmp/snowman-enterprise-cicd-m2/$BUILD_NUMBER"
+                    rm -rf "$maven_repo"
+                    mkdir -p "$maven_repo"
                     docker run --rm \
                         --user "$(id -u):$(id -g)" \
                         --group-add "$(stat -c %g /var/run/docker.sock)" \
@@ -145,8 +144,9 @@ pipeline {
                         --workdir /workspace \
                         "$MAVEN_IMAGE" \
                         mvn --batch-mode --no-transfer-progress \
+                            -Duser.home=/tmp/jenkins-user \
                             -Dliquibase.should.run=false \
-                            -Dmaven.repo.local="$container_maven_repo" \
+                            -Dmaven.repo.local="$maven_repo" \
                             clean verify
                     test -s target/Snowman.jar
                     test -s target/site/jacoco/jacoco.xml
@@ -166,10 +166,12 @@ pipeline {
                     withCredentials([string(
                         credentialsId: env.SONAR_CREDENTIALS_ID,
                         variable: 'SONAR_TOKEN'
-                    )]) {
+                        )]) {
                         sh '''#!/bin/bash
                             set -euo pipefail
-                            maven_repo="$WORKSPACE/.m2/repository"
+                            maven_repo="/tmp/snowman-enterprise-cicd-m2/$BUILD_NUMBER"
+                            rm -rf "$maven_repo"
+                            mkdir -p "$maven_repo"
                             mvn --batch-mode --no-transfer-progress \
                                 -Dliquibase.should.run=false \
                                 -Dmaven.repo.local="$maven_repo" \
@@ -197,7 +199,9 @@ pipeline {
                         )]) {
                             sh '''#!/bin/bash
                                 set -euo pipefail
-                                maven_repo="$WORKSPACE/.m2/repository"
+                                maven_repo="/tmp/snowman-enterprise-cicd-m2/$BUILD_NUMBER"
+                                rm -rf "$maven_repo"
+                                mkdir -p "$maven_repo"
                                 mvn --batch-mode --no-transfer-progress \
                                     -Dliquibase.should.run=false \
                                     -Dmaven.repo.local="$maven_repo" \
@@ -212,7 +216,9 @@ pipeline {
                         echo 'NVD_API_CREDENTIALS_ID is empty; the initial NVD update may be rate limited.'
                         sh '''#!/bin/bash
                             set -euo pipefail
-                            maven_repo="$WORKSPACE/.m2/repository"
+                            maven_repo="/tmp/snowman-enterprise-cicd-m2/$BUILD_NUMBER"
+                            rm -rf "$maven_repo"
+                            mkdir -p "$maven_repo"
                             mvn --batch-mode --no-transfer-progress \
                                 -Dliquibase.should.run=false \
                                 -Dmaven.repo.local="$maven_repo" \
