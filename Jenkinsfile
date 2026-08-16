@@ -135,6 +135,7 @@ pipeline {
                     set -euo pipefail
                     host_maven_repo="$WORKSPACE/.m2/repository"
                     container_maven_repo="/workspace/.m2/repository"
+                    rm -rf "$host_maven_repo"
                     mkdir -p "$host_maven_repo"
                     docker run --rm \
                         --user "$(id -u):$(id -g)" \
