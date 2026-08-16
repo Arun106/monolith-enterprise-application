@@ -133,19 +133,18 @@ pipeline {
             steps {
                 sh '''#!/bin/bash
                     set -euo pipefail
-                    mkdir -p "$HOME/.m2"
+                    maven_repo="$WORKSPACE/.m2/repository"
+                    mkdir -p "$maven_repo"
                     docker run --rm \
                         --user "$(id -u):$(id -g)" \
                         --group-add "$(stat -c %g /var/run/docker.sock)" \
                         --env HOME=/tmp/jenkins-user \
-                        --env MAVEN_CONFIG=/tmp/jenkins-user/.m2 \
                         --volume "$WORKSPACE:/workspace" \
-                        --volume "$HOME/.m2:/tmp/jenkins-user/.m2" \
                         --workdir /workspace \
                         "$MAVEN_IMAGE" \
                         mvn --batch-mode --no-transfer-progress \
                             -Dliquibase.should.run=false \
-                            -Dmaven.repo.local=/tmp/jenkins-user/.m2/repository \
+                            -Dmaven.repo.local="$maven_repo" \
                             clean verify
                     test -s target/Snowman.jar
                     test -s target/site/jacoco/jacoco.xml
@@ -168,8 +167,10 @@ pipeline {
                     )]) {
                         sh '''#!/bin/bash
                             set -euo pipefail
+                            maven_repo="$WORKSPACE/.m2/repository"
                             mvn --batch-mode --no-transfer-progress \
                                 -Dliquibase.should.run=false \
+                                -Dmaven.repo.local="$maven_repo" \
                                 org.sonarsource.scanner.maven:sonar-maven-plugin:5.2.0.4988:sonar \
                                 -Dsonar.host.url="$PVM1_SONAR_URL" \
                                 -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
@@ -194,8 +195,10 @@ pipeline {
                         )]) {
                             sh '''#!/bin/bash
                                 set -euo pipefail
+                                maven_repo="$WORKSPACE/.m2/repository"
                                 mvn --batch-mode --no-transfer-progress \
                                     -Dliquibase.should.run=false \
+                                    -Dmaven.repo.local="$maven_repo" \
                                     org.owasp:dependency-check-maven:12.1.8:check \
                                     -DskipTests \
                                     -Dformat=ALL \
@@ -207,8 +210,10 @@ pipeline {
                         echo 'NVD_API_CREDENTIALS_ID is empty; the initial NVD update may be rate limited.'
                         sh '''#!/bin/bash
                             set -euo pipefail
+                            maven_repo="$WORKSPACE/.m2/repository"
                             mvn --batch-mode --no-transfer-progress \
                                 -Dliquibase.should.run=false \
+                                -Dmaven.repo.local="$maven_repo" \
                                 org.owasp:dependency-check-maven:12.1.8:check \
                                 -DskipTests \
                                 -Dformat=ALL \
