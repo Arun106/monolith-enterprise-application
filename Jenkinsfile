@@ -107,14 +107,11 @@ pipeline {
         )
     }
 
+
     environment {
 
         CI = 'true'
 
-        /*
-         * Host Java is only used for Jenkins/agent utilities.
-         * Maven runs inside Docker.
-         */
         JAVA_HOME = '/usr/lib/jvm/java-17-openjdk-amd64'
 
         MAVEN_IMAGE = 'maven:3.9.13-eclipse-temurin-8-noble'
@@ -203,7 +200,19 @@ pipeline {
                     echo "CHECKING REQUIRED COMMANDS"
                     echo "========================================"
 
-                    for command in git docker curl java kubectl kustomize
+                    #
+                    # IMPORTANT:
+                    #
+                    # Standalone kustomize is NOT required.
+                    #
+                    # kubectl already provides:
+                    #
+                    #     kubectl kustomize
+                    #
+                    # Therefore we check kubectl instead of kustomize.
+                    #
+
+                    for command in git docker curl java kubectl az
                     do
                         if ! command -v "$command" >/dev/null 2>&1
                         then
@@ -215,20 +224,52 @@ pipeline {
 
 
                     echo "========================================"
+                    echo "CHECKING DOCKER COMPOSE"
+                    echo "========================================"
+
+                    if ! docker compose version >/dev/null 2>&1
+                    then
+                        echo "ERROR: Docker Compose plugin not available."
+                        exit 1
+                    fi
+
+
+                    echo "========================================"
+                    echo "CHECKING KUBECTL KUSTOMIZE"
+                    echo "========================================"
+
+                    if ! kubectl kustomize --help >/dev/null 2>&1
+                    then
+                        echo "ERROR: kubectl kustomize is not available."
+                        echo "Upgrade/install a kubectl version with Kustomize support."
+                        exit 1
+                    fi
+
+
+                    echo "========================================"
                     echo "TOOL VERSIONS"
                     echo "========================================"
 
+                    echo "--- Git ---"
                     git --version
 
+                    echo "--- Docker ---"
                     docker --version
 
+                    echo "--- Docker Compose ---"
                     docker compose version
 
+                    echo "--- Java ---"
                     java -version
 
+                    echo "--- Kubectl ---"
                     kubectl version --client
 
-                    kustomize version
+                    echo "--- Kubectl Kustomize ---"
+                    kubectl kustomize --help | head -20
+
+                    echo "--- Azure CLI ---"
+                    az version
 
 
                     echo "========================================"
@@ -774,6 +815,20 @@ pipeline {
                     echo "GENERATING KUBERNETES MANIFESTS"
                     echo "========================================"
 
+                    #
+                    # IMPORTANT:
+                    #
+                    # We intentionally use:
+                    #
+                    #     kubectl kustomize
+                    #
+                    # instead of:
+                    #
+                    #     kustomize
+                    #
+                    #
+
+
                     kubectl kustomize k8s/overlays/dev \
                         > snowman-dev.yaml
 
@@ -808,6 +863,11 @@ pipeline {
                             < "$manifest"
 
                     done
+
+
+                    echo "========================================"
+                    echo "DELIVERY CONFIGURATION VALIDATED"
+                    echo "========================================"
                 '''
             }
         }
