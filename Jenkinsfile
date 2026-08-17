@@ -455,7 +455,7 @@ pipeline {
                                     --volume "$WORKSPACE:/workspace" \
                                     --volume "$maven_repo:/maven-repository" \
                                     --workdir /workspace \
-                                    "$MAVEN_IMAGE" \
+                                    "$SONAR_MAVEN_IMAGE" \
                                     sh -c '
                                         set -e
 
@@ -508,7 +508,7 @@ pipeline {
                                 --volume "$WORKSPACE:/workspace" \
                                 --volume "$maven_repo:/maven-repository" \
                                 --workdir /workspace \
-                                "$MAVEN_IMAGE" \
+                                "$SONAR_MAVEN_IMAGE" \
                                 sh -c '
                                     set -e
 
