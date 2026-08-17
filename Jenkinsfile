@@ -1126,6 +1126,8 @@ pipeline {
                             --namespace snowman \
                             --ignore-not-found=true
 
+                        smoke_overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":100,"runAsGroup":101,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"snowman-smoke-'"$BUILD_NUMBER"'","securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}}]}}'
+
                         kubectl run \
                             "snowman-smoke-$BUILD_NUMBER" \
                             --namespace snowman \
@@ -1133,6 +1135,7 @@ pipeline {
                             --restart=Never \
                             --rm \
                             --attach \
+                            --overrides="$smoke_overrides" \
                             --command -- \
                             curl \
                                 --fail \
