@@ -66,37 +66,37 @@ pipeline {
 
         string(
             name: 'ACR_LOGIN_SERVER',
-            defaultValue: 'chunkhoundacr20260802.azurecr.io',
+            defaultValue: 'snowmanacr29173.azurecr.io',
             description: 'Azure Container Registry login server'
         )
 
         string(
             name: 'ACR_CREDENTIALS_ID',
-            defaultValue: 'acr-chunkhound',
+            defaultValue: 'acr-snowman',
             description: 'Jenkins ACR username/password credential'
         )
 
         string(
             name: 'AKS_RESOURCE_GROUP',
-            defaultValue: 'Ar-RG',
+            defaultValue: 'snowman-rg',
             description: 'AKS resource group'
         )
 
         string(
             name: 'AKS_CLUSTER_NAME',
-            defaultValue: 'Ar-AKS',
+            defaultValue: 'snowman-aks',
             description: 'AKS cluster name'
         )
 
         string(
             name: 'AZURE_TENANT_ID',
-            defaultValue: 'pavip7547gmail.onmicrosoft.com',
+            defaultValue: '05a9af5a-38a8-4644-8268-229b2d91e517',
             description: 'Azure tenant ID'
         )
 
         string(
             name: 'AZURE_SUBSCRIPTION_ID',
-            defaultValue: 'ffcf8f61-5974-487d-95d9-9adf380c6233',
+            defaultValue: 'fdf5d975-00eb-4f5a-8602-9de647fa9493',
             description: 'Azure subscription ID'
         )
 
@@ -1043,10 +1043,11 @@ pipeline {
                         echo "DEPLOY APPLICATION"
                         echo "========================================"
 
-                        sed \
+                        sed -i \
                             "s#ghcr.io/adikarthik/monolith-enterprise-application:latest#$ACR_LOGIN_SERVER/$APPLICATION_IMAGE:$IMAGE_TAG#g" \
-                            snowman-production.yaml |
-                            kubectl apply -f -
+                            k8s/base/deployment.yaml
+
+                        kubectl apply -k k8s/overlays/dev
 
                         echo "========================================"
                         echo "DELETE OLD MIGRATION JOB"
@@ -1061,10 +1062,11 @@ pipeline {
                         echo "CREATE MIGRATION JOB"
                         echo "========================================"
 
-                        sed \
+                        sed -i \
                             "s#ghcr.io/adikarthik/monolith-enterprise-application-migration:latest#$ACR_LOGIN_SERVER/$MIGRATION_IMAGE:$IMAGE_TAG#g" \
-                            snowman-migration.yaml |
-                            kubectl apply -f -
+                            k8s/jobs/database-migration.yaml
+
+                        kubectl apply -k k8s/jobs
 
                         echo "========================================"
                         echo "WAIT FOR MIGRATION"
@@ -1132,7 +1134,7 @@ pipeline {
                                 --show-error \
                                 --retry 12 \
                                 --retry-delay 5 \
-                                http://snowman:8090/health
+                                http://snowman/health
 
                         echo "========================================"
                         echo "AKS DEPLOYMENT SUCCESSFUL"
