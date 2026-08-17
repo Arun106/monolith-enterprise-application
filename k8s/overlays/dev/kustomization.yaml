@@ -5,6 +5,8 @@ resources:
   - ../../base
   - mysql.yaml
   - activemq.yaml
+patches:
+  - path: rollout-strategy-patch.yaml
 secretGenerator:
   - name: snowman-secrets
     literals:
