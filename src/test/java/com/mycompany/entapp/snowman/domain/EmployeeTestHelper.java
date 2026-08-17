@@ -16,7 +16,9 @@ public final class EmployeeTestHelper {
     public static Employee getEmployee() {
         Employee employee = new Employee();
         employee.setId(1);
-        employee.setRole(new EmployeeRole());
+        EmployeeRole employeeRole = new EmployeeRole();
+        employeeRole.setRole("Role");
+        employee.setRole(employeeRole);
         employee.setFirstname("FirstName");
         employee.setSurname("Surname");
         return employee;

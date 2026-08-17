@@ -15,11 +15,23 @@ import java.net.URL;
 public class EnterpriseApplication {
 
     private static final int DEFAULT_PORT = 8090;
+    private static final String[][] ENVIRONMENT_PROPERTY_MAPPINGS = {
+            {"SNOWMAN_JDBC_DRIVER", "jdbc.driverClassName"},
+            {"SNOWMAN_JDBC_URL", "jdbc.url"},
+            {"SNOWMAN_JDBC_USERNAME", "jdbc.username"},
+            {"SNOWMAN_JDBC_PASSWORD", "jdbc.password"},
+            {"SNOWMAN_JMS_BROKER_URL", "jms.brokerUrl"},
+            {"SNOWMAN_HIBERNATE_DIALECT", "hibernate.dialect"},
+            {"SNOWMAN_HIBERNATE_DDL_AUTO", "hibernate.hbm2ddl.auto"},
+            {"PORT", "port"}
+    };
 
     private EnterpriseApplication() {
     }
 
     public static void main(String[] args) throws Exception {
+
+        applyEnvironmentOverrides();
 
         final Server server = new Server();
 
@@ -70,6 +82,17 @@ public class EnterpriseApplication {
             return Integer.parseInt(System.getProperty("port"));
         } catch (NumberFormatException ex) {
             return DEFAULT_PORT;
+        }
+    }
+
+    private static void applyEnvironmentOverrides() {
+        for (String[] mapping : ENVIRONMENT_PROPERTY_MAPPINGS) {
+            String environmentValue = System.getenv(mapping[0]);
+            if (environmentValue != null
+                    && !environmentValue.trim().isEmpty()
+                    && System.getProperty(mapping[1]) == null) {
+                System.setProperty(mapping[1], environmentValue);
+            }
         }
     }
 }

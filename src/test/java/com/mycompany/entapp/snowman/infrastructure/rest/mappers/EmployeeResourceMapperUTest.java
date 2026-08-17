@@ -22,9 +22,9 @@ public class EmployeeResourceMapperUTest {
         EmployeeResource actualEmployeeResource = EmployeeResourceMapper.mapEmployeeToEmployeeResource(employee);
 
         assertEquals(1, actualEmployeeResource.getEmployeeId());
-        assertEquals("firstName", actualEmployeeResource.getFirstName());
-        assertEquals("surName", actualEmployeeResource.getSecondName());
-        assertEquals("role", actualEmployeeResource.getRole());
+        assertEquals("FirstName", actualEmployeeResource.getFirstName());
+        assertEquals("Surname", actualEmployeeResource.getSecondName());
+        assertEquals("Role", actualEmployeeResource.getRole());
     }
 
     @Test
@@ -45,7 +45,7 @@ public class EmployeeResourceMapperUTest {
         assertEquals("firstName", actualEmployee.getFirstname());
         assertEquals("surname", actualEmployee.getSurname());
         assertEquals(employeeRole, actualEmployee.getRole());
-        assertEquals(null, actualEmployee.getProjects());
+        assertTrue(actualEmployee.getProjects().isEmpty());
     }
 
 }

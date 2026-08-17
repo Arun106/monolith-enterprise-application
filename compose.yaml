@@ -1,0 +1,65 @@
+services:
+  mysql:
+    image: mysql:8.0.46
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-snowman}
+      MYSQL_USER: ${MYSQL_USER:-snowman}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-snowman-local}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root-local}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mysqladmin ping -h 127.0.0.1 -u root -p"$${MYSQL_ROOT_PASSWORD}"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  activemq:
+    image: apache/activemq-classic:5.19.2
+    volumes:
+      - activemq-data:/opt/apache-activemq/data
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.migration
+    command:
+      - --driver=com.mysql.cj.jdbc.Driver
+      - --url=jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-snowman}
+      - --username=${MYSQL_USER:-snowman}
+      - --password=${MYSQL_PASSWORD:-snowman-local}
+      - --changelog-file=changelog/db/liquibase-changelog-schema.xml
+      - update
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build:
+      context: .
+    environment:
+      PORT: "8090"
+      SNOWMAN_JDBC_DRIVER: com.mysql.cj.jdbc.Driver
+      SNOWMAN_JDBC_URL: ${SNOWMAN_JDBC_URL:-jdbc:mysql://mysql:3306/snowman?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+      SNOWMAN_JDBC_USERNAME: ${MYSQL_USER:-snowman}
+      SNOWMAN_JDBC_PASSWORD: ${MYSQL_PASSWORD:-snowman-local}
+      SNOWMAN_JMS_BROKER_URL: ${SNOWMAN_JMS_BROKER_URL:-tcp://activemq:61616}
+      SNOWMAN_HIBERNATE_DDL_AUTO: validate
+    ports:
+      - "8090:8090"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      activemq:
+        condition: service_started
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+
+volumes:
+  mysql-data:
+  activemq-data:
