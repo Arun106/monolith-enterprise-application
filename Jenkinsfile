@@ -442,8 +442,9 @@ pipeline {
                                 echo "========================================"
 
                                 maven_repo="$WORKSPACE/.m2"
+                                owasp_cache="$WORKSPACE/../.owasp-dc-cache"
 
-                                mkdir -p "$maven_repo"
+                                mkdir -p "$maven_repo" "$owasp_cache"
 
                                 docker run \
                                     --rm \
@@ -454,6 +455,7 @@ pipeline {
                                     --env SECURITY_GATE_MODE="$SECURITY_GATE_MODE" \
                                     --volume "$WORKSPACE:/workspace" \
                                     --volume "$maven_repo:/maven-repository" \
+                                    --volume "$owasp_cache:/owasp-dc-cache" \
                                     --workdir /workspace \
                                     "$SONAR_MAVEN_IMAGE" \
                                     sh -c '
@@ -479,6 +481,7 @@ pipeline {
                                             org.owasp:dependency-check-maven:12.1.8:check \
                                             -DskipTests \
                                             -Dformat=ALL \
+                                            -DdataDirectory=/owasp-dc-cache \
                                             -DfailBuildOnCVSS="$CVSS" \
                                             -DnvdApiKey="$NVD_API_KEY"
                                     '
@@ -496,8 +499,9 @@ pipeline {
                             echo "========================================"
 
                             maven_repo="$WORKSPACE/.m2"
+                            owasp_cache="$WORKSPACE/../.owasp-dc-cache"
 
-                            mkdir -p "$maven_repo"
+                            mkdir -p "$maven_repo" "$owasp_cache"
 
                             docker run \
                                 --rm \
@@ -507,6 +511,7 @@ pipeline {
                                 --env SECURITY_GATE_MODE="$SECURITY_GATE_MODE" \
                                 --volume "$WORKSPACE:/workspace" \
                                 --volume "$maven_repo:/maven-repository" \
+                                --volume "$owasp_cache:/owasp-dc-cache" \
                                 --workdir /workspace \
                                 "$SONAR_MAVEN_IMAGE" \
                                 sh -c '
@@ -532,6 +537,7 @@ pipeline {
                                         org.owasp:dependency-check-maven:12.1.8:check \
                                         -DskipTests \
                                         -Dformat=ALL \
+                                        -DdataDirectory=/owasp-dc-cache \
                                         -DfailBuildOnCVSS="$CVSS"
                                 '
                         '''
